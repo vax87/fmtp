@@ -1,0 +1,49 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    
+        {
+            "name": "fmtp_chief",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/chief/fmtp_chief.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "amd64"
+            },
+            "args": [],
+            "showLog": true,
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "fmtp_logger",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/logger/fmtp_logger.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "amd64"
+            },
+            "args": []
+        },
+        {            
+            "name": "fmtp_channel",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/channel/fmtp_channel.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "amd64"
+            },
+            //"args": ["34533", "16", "W", "U", "OLDI"]
+            //"args": ["34533", "13", "W", "U", "OLDI"]
+            "args": ["34533", "11", "W", "U", "OLDI", "channel", "13111"]
+        }
+    ]
+}

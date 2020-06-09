@@ -1,0 +1,9 @@
+.idea
+/bin
+fmtp_logger
+fmtp_channel
+fmtp_chief
+logs
+chief/config/fmtp_settings.json
+chief/config/logger_settings.json
+chief/__debug_bin
