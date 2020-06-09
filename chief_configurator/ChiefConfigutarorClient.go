@@ -135,11 +135,13 @@ func (cc *ChiefConfigutarorClient) Work() {
 
 // Start запуск взаимодействия с конфигуратором
 func (cc *ChiefConfigutarorClient) Start() {
-	if err := cc.configUrls.Read(); err != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-			"Ошибка чтения файла с URL конфигуратора. Ошибка: <%s>.", err.Error()))
-		return
-	}
+	// if err := cc.configUrls.ReadFromFile(); err != nil {
+	// 	cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
+	// 		"Ошибка чтения файла с URL конфигуратора. Ошибка: <%s>.", err.Error()))
+	// 	return
+	// }
+	cc.configUrls.ReadFromFile()
+
 	cc.initBeforeGetSettings()
 	cc.postSettingsRequest()
 }

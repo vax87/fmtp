@@ -1,12 +1,10 @@
 package chief_configurator
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/url"
-	"os"
-	"path/filepath"
+
+	"fdps/utils"
+	"fdps/utils/logger"
 )
 
 // ConfiguratorUrls URL для взаимодействия конфигуратора.
@@ -17,29 +15,26 @@ type ConfiguratorUrls struct {
 	SettingsURL     *url.URL `json:"",omitempty`
 }
 
-// чтение настроек URL из файла
-func (cu *ConfiguratorUrls) Read() error {
-	var confFilePath string // путь к файлу с настройками URL
-	if ex, err := os.Executable(); err == nil {
-		confFilePath = filepath.Dir(ex) + "/config/config_urls.json"
-	} else {
-		return fmt.Errorf("Ошибка чтения файла конфигураций URL. Ошибка: %s.", err.Error())
-	}
+var confFilePath = utils.AppPath() + "/config/config_urls.json"
 
-	if configFile, err := ioutil.ReadFile(confFilePath); err == nil {
-		if err := json.Unmarshal(configFile, cu); err != nil {
-			return fmt.Errorf("Ошибка разбора файла конфигураций URL. Ошибка: %s.", err.Error())
-		}
-	} else {
-		return fmt.Errorf("Ошибка чтения файла конфигураций URL. Ошибка: %s.", err.Error())
+// чтение настроек URL из файла
+func (cu *ConfiguratorUrls) ReadFromFile() {
+	if errRead := utils.ReadFromFile(confFilePath, cu); errRead != nil {
+		logger.PrintfErr("Ошибка чтения файла конфигураций URL. Ошибка: %v.", errRead)
 	}
 
 	var urlErr error
 	if cu.HeartbeatURL, urlErr = url.ParseRequestURI(cu.HeartbeatURLStr); urlErr != nil {
-		return fmt.Errorf("Не верное значение URL отправки состояния конфигуратору.Значение URL: %s.", cu.SettingsURLStr)
+		logger.PrintfErr("Неверное значение URL отправки состояния конфигуратору. URL: %s. Ошибка: %v", cu.SettingsURLStr, urlErr)
 	}
 	if cu.SettingsURL, urlErr = url.ParseRequestURI(cu.SettingsURLStr); urlErr != nil {
-		return fmt.Errorf("Не верное значение URL запроса настроек у конфигуратора. Значение URL: %s.", cu.SettingsURLStr)
+		logger.PrintfErr("Неверное значение URL запроса настроек у конфигуратора. URL: %s. Ошибка: %v", cu.SettingsURLStr, urlErr)
 	}
-	return nil
+}
+
+// SaveToFile сохранение настроек в файл
+func (cu *ConfiguratorUrls) SaveToFile() {
+	if errWrite := utils.SaveToFile(confFilePath, cu); errWrite != nil {
+		logger.PrintfErr("Ошибка сохранения конфигурации URL в файл. Ошибка: %v", errWrite)
+	}
 }
