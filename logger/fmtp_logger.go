@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fdps/fmtp/chief_logger"
+	"fdps/utils/web_sock"
 
 	"fdps/fmtp/logger/common"
 	"fdps/fmtp/logger/file"
@@ -10,7 +11,6 @@ import (
 	"fdps/fmtp/logger/oracle"
 	"fdps/fmtp/utils"
 	"fdps/fmtp/web"
-	"fdps/fmtp/web_sock"
 	"fmt"
 	"log"
 )
@@ -22,8 +22,10 @@ var fileLogCntrl = &file.FileLoggerController{MessChan: make(chan common.LogMess
 // контроллер записи в БД oracle
 var oracleLogCntrl = oracle.NewOracleController()
 
+var done = make(chan struct{})
+
 // контроллер для работы с сетью
-var netController = web_sock.NewWebSockServer()
+var netController = web_sock.NewWebSockServer(done)
 
 func settingsRoutine() {
 	var setCntrl = &logger_settings.SettingsController{
@@ -117,9 +119,9 @@ func main() {
 					Text:     fmt.Sprintf("Возникла ошибка при работе WS сервера взаимодействия с FMTP каналами. Ошибка: <%s>.", curWsErr.Error()),
 					Severity: common.SeverityError})
 			}
-		// получено уведомление от WS сервера
-		case wsInfo := <-netController.InfoChan:
-			web.AppendLog(common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo))
+			// получено уведомление от WS сервера
+			//case wsInfo := <-netController.InfoChan:
+			//	web.AppendLog(common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo))
 		}
 	}
 }

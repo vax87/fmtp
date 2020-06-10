@@ -23,8 +23,6 @@ import (
 	"fdps/fmtp/fmtp"
 	"fdps/fmtp/logger/common"
 	"fdps/fmtp/utils"
-	"fdps/fmtp/web"
-	"fdps/fmtp/web_sock"
 )
 
 // сведения об исполняемом файле канала
@@ -52,14 +50,15 @@ type ChiefChannelServer struct {
 	ChannelBinMap map[int]сhannelBin     // ключ - идентификатор канала
 	killerChan    chan struct{}          // канал, по которому передается сигнал о завершение работы канала
 
-	ws *web_sock.WebSockServer
+	//ws *web_sock.WebSockServer
 
 	//wsClients map[int]*web_sock.WebSockServerSocket
 	wsClients map[int]*websocket.Conn
 
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
-	aodbIdent int // идентификатор сообщения, отправляемого AODB cервису
+	aodbIdent  int // идентификатор сообщения, отправляемого AODB cервису
+	withDocker bool
 }
 
 // состояние FMTP канала, при котором ему отправляем сообщений от AODB
@@ -67,7 +66,7 @@ var chValidSt = fmtp.DataReady
 var chValidStStr = chValidSt.ToString()
 
 // NewChiefChannelServer конструктор
-func NewChiefChannelServer() *ChiefChannelServer {
+func NewChiefChannelServer(workWithDocker bool) *ChiefChannelServer {
 	return &ChiefChannelServer{
 		ChannelSettsChan: make(chan channel_settings.ChannelSettingsWithPort, 10),
 		channelSetts: channel_settings.ChannelSettingsWithPort{
@@ -81,16 +80,17 @@ func NewChiefChannelServer() *ChiefChannelServer {
 		killerChan:           make(chan struct{}),
 		ChannelBinMap:        make(map[int]сhannelBin),
 		//chiefChannelWS:       chief_channel.NewChiefChannelServer(),
-		ws:        web_sock.NewWebSockServer(),
-		wsClients: make(map[int]*websocket.Conn),
-		chStates:  make(map[int]сhannelStateTime),
-		aodbIdent: 1,
+		//ws:        web_sock.NewWebSockServer(),
+		wsClients:  make(map[int]*websocket.Conn),
+		chStates:   make(map[int]сhannelStateTime),
+		aodbIdent:  1,
+		withDocker: workWithDocker,
 	}
 }
 
 // Work реализация работы
 func (cc *ChiefChannelServer) Work() {
-	go cc.ws.Work(utils.ChannelURLPath)
+	//go cc.ws.Work(utils.ChannelURLPath)
 	//cc.chiefChannelWS.SettChan <- chief_channel.ServerSettings{ChiefPort: cc.ChannelPort}
 
 	for {
@@ -101,7 +101,7 @@ func (cc *ChiefChannelServer) Work() {
 			var needToStopIds, needToStartIds []int // идентификаторы каналов, которые необходимо остановить/запустить
 
 			if cc.channelSetts.ChPort != newSetts.ChPort {
-				cc.ws.SettingsChan <- web_sock.WebSockServerSettings{LocalPort: newSetts.ChPort}
+				//cc.ws.SettingsChan <- web_sock.WebSockServerSettings{LocalPort: newSetts.ChPort}
 
 				// обнуляем состояния каналов
 				for key := range cc.chStates {
@@ -250,107 +250,107 @@ func (cc *ChiefChannelServer) Work() {
 
 			}
 
-		// получены данные от WS сервера
-		case curWsPkg := <-cc.ws.ReceiveDataChan:
-			var curHdr HeaderMsg
-			var unmErr error
-			if unmErr = json.Unmarshal(curWsPkg.Data, &curHdr); unmErr == nil {
-				switch curHdr.Header {
+			// получены данные от WS сервера
+			// case curWsPkg := <-cc.ws.ReceiveDataChan:
+			// 	var curHdr HeaderMsg
+			// 	var unmErr error
+			// 	if unmErr = json.Unmarshal(curWsPkg.Data, &curHdr); unmErr == nil {
+			// 		switch curHdr.Header {
 
-				case RequestSettingsHeader:
-					var reqSettsMsg SettingsRequestMsg
-					if err := json.Unmarshal(curWsPkg.Data, &reqSettsMsg); err == nil {
-						cc.wsClients[reqSettsMsg.ChannelID] = curWsPkg.Sock
+			// 		case RequestSettingsHeader:
+			// 			var reqSettsMsg SettingsRequestMsg
+			// 			if err := json.Unmarshal(curWsPkg.Data, &reqSettsMsg); err == nil {
+			// 				cc.wsClients[reqSettsMsg.ChannelID] = curWsPkg.Sock
 
-						var channelSetts channel_settings.ChannelSettings
-					SETTSL:
-						for _, curSetts := range cc.channelSetts.ChSettings {
-							if curSetts.Id == reqSettsMsg.ChannelID {
-								channelSetts = curSetts
-								break SETTSL
-							}
-						}
+			// 				var channelSetts channel_settings.ChannelSettings
+			// 			SETTSL:
+			// 				for _, curSetts := range cc.channelSetts.ChSettings {
+			// 					if curSetts.Id == reqSettsMsg.ChannelID {
+			// 						channelSetts = curSetts
+			// 						break SETTSL
+			// 					}
+			// 				}
 
-						if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
-							cc.ws.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
-						}
-					}
+			// 				if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
+			// 					cc.ws.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
+			// 				}
+			// 			}
 
-				case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
-					var curHbtMsg ChannelHeartbeatMsg
-					if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
-						cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
-					}
+			// 		case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
+			// 			var curHbtMsg ChannelHeartbeatMsg
+			// 			if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
+			// 				cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
+			// 			}
 
-					// отправляем heartbeat контроллеру
-					var chStateSlice []channel_state.ChannelState
-					for key := range cc.chStates {
-						chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
-					}
-					cc.ChannelStates <- chStateSlice
+			// 			// отправляем heartbeat контроллеру
+			// 			var chStateSlice []channel_state.ChannelState
+			// 			for key := range cc.chStates {
+			// 				chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
+			// 			}
+			// 			cc.ChannelStates <- chStateSlice
 
-				case ChannelLogHeader:
-					var curLogMsg ChannelLogMsg
-					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
-						cc.LogChan <- curLogMsg.LogMessage
-					}
+			// 		case ChannelLogHeader:
+			// 			var curLogMsg ChannelLogMsg
+			// 			if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
+			// 				cc.LogChan <- curLogMsg.LogMessage
+			// 			}
 
-				case ChannelMessageHeader:
+			// 		case ChannelMessageHeader:
 
-					var dataMsg DataMsg
-					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
-						var localAtc, remoteAtc string
-						for _, val := range cc.channelSetts.ChSettings {
-							if val.Id == dataMsg.ChannelID {
-								localAtc = val.LocalATC
-								remoteAtc = val.RemoteATC
-								break
-							}
-						}
+			// 			var dataMsg DataMsg
+			// 			if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
+			// 				var localAtc, remoteAtc string
+			// 				for _, val := range cc.channelSetts.ChSettings {
+			// 					if val.Id == dataMsg.ChannelID {
+			// 						localAtc = val.LocalATC
+			// 						remoteAtc = val.RemoteATC
+			// 						break
+			// 					}
+			// 				}
 
-						var aodbDataMsg fdps.FdpsAodbPackage
-						aodbDataMsg.MsgHeader = fdps.FdpsDataText
-						aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
-						aodbDataMsg.LocalAtc = localAtc
-						aodbDataMsg.RemoteAtc = remoteAtc
-						aodbDataMsg.Text = dataMsg.Text
+			// 				var aodbDataMsg fdps.FdpsAodbPackage
+			// 				aodbDataMsg.MsgHeader = fdps.FdpsDataText
+			// 				aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
+			// 				aodbDataMsg.LocalAtc = localAtc
+			// 				aodbDataMsg.RemoteAtc = remoteAtc
+			// 				aodbDataMsg.Text = dataMsg.Text
 
-						cc.aodbIdent++
-						if cc.aodbIdent > 100000 {
-							cc.aodbIdent = 1
-						}
+			// 				cc.aodbIdent++
+			// 				if cc.aodbIdent > 100000 {
+			// 					cc.aodbIdent = 1
+			// 				}
 
-						if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-							cc.OutAodbPacketChan <- dataToSend
+			// 				if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
+			// 					cc.OutAodbPacketChan <- dataToSend
 
-							cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
-								fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: <%d>, Лок. ATC: <%s>, Удал. ATC: <%s>, Текст: <%s>.",
-									fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
-						}
-					}
-				}
+			// 					cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
+			// 						fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: <%d>, Лок. ATC: <%s>, Удал. ATC: <%s>, Текст: <%s>.",
+			// 							fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+			// 				}
+			// 			}
+			// 		}
 
-			} else {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: <%s>.", unmErr))
-			}
+			// 	} else {
+			// 		cc.LogChan <- common.LogCntrlST(common.SeverityError,
+			// 			fmt.Sprintf("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: <%s>.", unmErr))
+			// 	}
 
-		// получена ошибка от ws сервера
-		case wsErr := <-cc.ws.ErrorChan:
-			var curLogMsg common.LogMessage
-			if wsErr == nil {
-				web.SetWSChannelState(true)
-				curLogMsg = common.LogCntrlST(common.SeverityInfo, "Запускаем WS сервер для взаимодействия с FMTP каналами.")
-			} else {
-				web.SetWSChannelState(false)
-				curLogMsg = common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Возникла ошибка при работе WS сервера взаимодействия с FMTP каналами. Ошибка: <%s>.", wsErr.Error()))
-			}
-			cc.LogChan <- curLogMsg
+			// получена ошибка от ws сервера
+			// case wsErr := <-cc.ws.ErrorChan:
+			// 	var curLogMsg common.LogMessage
+			// 	if wsErr == nil {
+			// 		web.SetWSChannelState(true)
+			// 		curLogMsg = common.LogCntrlST(common.SeverityInfo, "Запускаем WS сервер для взаимодействия с FMTP каналами.")
+			// 	} else {
+			// 		web.SetWSChannelState(false)
+			// 		curLogMsg = common.LogCntrlST(common.SeverityError,
+			// 			fmt.Sprintf("Возникла ошибка при работе WS сервера взаимодействия с FMTP каналами. Ошибка: <%s>.", wsErr.Error()))
+			// 	}
+			// 	cc.LogChan <- curLogMsg
 
-			// получено уведомление от ws сервера
-		case wsInfo := <-cc.ws.InfoChan:
-			cc.LogChan <- common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo)
+			// 	// получено уведомление от ws сервера
+			// case wsInfo := <-cc.ws.InfoChan:
+			// 	cc.LogChan <- common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo)
 		}
 	}
 }
@@ -368,13 +368,15 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 	}
 	accMsg := fdps.FdpsAodbAcknowledge{FdpsHeader: fdps.FdpsHeader{MsgHeader: fdps.FdpsAcknowledge}, Ident: pkg.Ident}
 	if channelID != -1 {
-		if sock, ok := cc.wsClients[channelID]; ok {
-			if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+		// if sock, ok := cc.wsClients[channelID]; ok {
+		// 	if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+		if _, ok := cc.wsClients[channelID]; ok {
+			if _, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
 				cc.LogChan <- common.LogCntrlST(common.SeverityError,
 					fmt.Sprintf("Ошибка формирования сообщения для FMTP канала. Ошибка: <%s>.", mrshErr))
 			} else {
 				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
+					//cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
 					accMsg.State = fdps.FdpsAckOkText
 				} else {
 					accMsg.State = fdps.FdpsAckFailedText
@@ -407,7 +409,7 @@ STOPL:
 			channelBin.killChan <- struct{}{}
 			<-cc.killerChan
 
-			if !chief_configurator.WorkWithDocker {
+			if !cc.withDocker {
 				if err := utils.RemoveChannelBinary(channelBin.filePath); err != nil {
 					cc.LogChan <- common.LogCntrlST(common.SeverityError, err.Error())
 					continue STOPL
@@ -426,7 +428,7 @@ STARTL:
 	STARTL2:
 		for _, newIt := range cc.channelSetts.ChSettings {
 			if startID == newIt.Id {
-				if chief_configurator.WorkWithDocker {
+				if cc.withDocker {
 					cc.ChannelBinMap[startID] = сhannelBin{killChan: make(chan struct{})}
 					go cc.startChannelContainer(newIt, cc.ChannelBinMap[startID].killChan)
 

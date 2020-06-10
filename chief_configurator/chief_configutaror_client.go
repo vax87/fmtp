@@ -16,19 +16,16 @@ import (
 	"fdps/fmtp/logger/common"
 	"fdps/fmtp/utils"
 	"fdps/fmtp/web"
+	"fdps/utils/logger"
 )
 
-// WorkWithDocker docker есть на компе, работаем с docker контейнерами, а не с фалами
-var WorkWithDocker bool = false
+const dbgChannelVersions = "Версии FMTP каналов"
 
 // ChiefCfg настройки контроллера каналов(chief)
 var ChiefCfg chief_settings.ChiefSettings = chief_settings.ChiefSettings{CntrlID: -1, IPAddr: "127.0.0.1", IsInitialised: false}
 
 // ChannelVersions список версий приложений/docker бразов FTP канала
 var ChannelVersions []string
-
-// DockerVersion версия docker
-var DockerVersion string
 
 // ChannelImageName имя docker образа приложения 'FMTP канал'
 const ChannelImageName = "fmtp_channel"
@@ -45,11 +42,11 @@ type ChiefConfigutarorClient struct {
 
 	readLocalSettingsTimer *time.Timer
 
-	LogChan chan common.LogMessage // канал для передачи логов
+	withDocker bool
 }
 
 // NewChiefClient конструктор клиента
-func NewChiefClient() *ChiefConfigutarorClient {
+func NewChiefClient(workWithDocker bool) *ChiefConfigutarorClient {
 	return &ChiefConfigutarorClient{
 		HeartbeatChan:          make(chan HeartbeatMsg, 10),
 		FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort),
@@ -57,7 +54,7 @@ func NewChiefClient() *ChiefConfigutarorClient {
 		ProviderSettsChan:      make(chan []fdps.ProviderSettings),
 		postResultChan:         make(chan json.RawMessage, 10),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
-		LogChan:                make(chan common.LogMessage, 10),
+		withDocker:             workWithDocker,
 	}
 }
 
@@ -70,15 +67,13 @@ func (cc *ChiefConfigutarorClient) Work() {
 		case postRes := <-cc.postResultChan:
 			var msgHeader MessageHeader
 			if unmErr := json.Unmarshal(postRes, &msgHeader); unmErr != nil {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-					"Ошибка разбора (unmarshall) сообщения от конфигуратора. Сообщение: <%s>. Ошибка: <%s>.", string(postRes), unmErr.Error()))
+				logger.PrintfErr("Ошибка разбора (unmarshall) сообщения от конфигуратора. Сообщение: %s. Ошибка: %s.", string(postRes), unmErr.Error())
 			} else {
 				switch msgHeader.Header {
 				// ответ на запрос настроек
 				case AnswerSettingsHeader:
 					if unmErr = json.Unmarshal(postRes, &ChiefCfg); unmErr != nil {
-						cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-							"Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: <%s>. Ошибка: <%s>.", string(postRes), unmErr.Error()))
+						logger.PrintfErr("Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: %s. Ошибка: %s.", string(postRes), unmErr.Error())
 					} else {
 						//chiefCfg = &curMsg
 						ChiefCfg.IsInitialised = true
@@ -101,8 +96,7 @@ func (cc *ChiefConfigutarorClient) Work() {
 				case HeartbeatAnswerHeader:
 					var curMsg HeartbeatAnswerMsg
 					if unmErr := json.Unmarshal(postRes, &curMsg); unmErr != nil {
-						cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-							"Ошибка разбора (unmarshall) ответа на сообщение о состоянии контроллера. Сообщение: <%s>. Ошибка: <%s>.", string(postRes), unmErr.Error()))
+						logger.PrintfErr("Ошибка разбора (unmarshall) ответа на сообщение о состоянии контроллера. Сообщение: %s. Ошибка: %s.", string(postRes), unmErr.Error())
 					} else {
 						if curMsg.ConfigTimestamp != ChiefCfg.Timestamp {
 							go cc.postSettingsRequest()
@@ -110,8 +104,7 @@ func (cc *ChiefConfigutarorClient) Work() {
 					}
 
 				default:
-					cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-						"Получено сообщение с неизвестнм заголовком от конфигуратора. Загогловок: <%s>.", msgHeader.Header))
+					logger.PrintfErr("Получено сообщение с неизвестнм заголовком от конфигуратора. Загогловок: %s.", msgHeader.Header)
 				}
 			}
 
@@ -122,10 +115,9 @@ func (cc *ChiefConfigutarorClient) Work() {
 		// сработал таймер считывания настроек из файла
 		case <-cc.readLocalSettingsTimer.C:
 			if fileErr := ChiefCfg.ReadFromFile(); fileErr != nil {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-					"Ошибка чтения настроек контроллера з файла. Ошибка: <%s>.", fileErr.Error()))
+				logger.PrintfErr("Ошибка чтения настроек контроллера з файла. Ошибка: %s.", fileErr.Error())
 			} else {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError, string("Настройки контроллера считаны из файла."))
+				logger.PrintfErr("Настройки контроллера считаны из файла.")
 				// отправляем настройки
 				go cc.sendSettings()
 			}
@@ -135,11 +127,6 @@ func (cc *ChiefConfigutarorClient) Work() {
 
 // Start запуск взаимодействия с конфигуратором
 func (cc *ChiefConfigutarorClient) Start() {
-	// if err := cc.configUrls.ReadFromFile(); err != nil {
-	// 	cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-	// 		"Ошибка чтения файла с URL конфигуратора. Ошибка: <%s>.", err.Error()))
-	// 	return
-	// }
 	cc.configUrls.ReadFromFile()
 
 	cc.initBeforeGetSettings()
@@ -151,8 +138,7 @@ func (cc *ChiefConfigutarorClient) postSettingsRequest() {
 
 	postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(ChannelVersions))
 	if postErr != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError,
-			fmt.Sprintf("Ошибка запроса настроек у конфигуратора. Ошибка: <%s>", postErr.Error()))
+		logger.PrintfErr("Ошибка запроса настроек у конфигуратора. Ошибка: %s", postErr.Error())
 
 		// если настройки не инициализированы, снова их запрашиваем
 		// при считывании из файла настроки не инициализируются (только при получении от конфигуратора)
@@ -172,26 +158,26 @@ func (cc *ChiefConfigutarorClient) postToConfigurator(url string, msg interface{
 			if body, readErr := ioutil.ReadAll(resp.Body); readErr == nil {
 				if bytes.Contains(body, []byte("error")) { //пишем в логи только ошибки
 					web.SetConfigConn(false)
-					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: <%s>", string(body))
+					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))
 				}
 				if ind := strings.Index(string(body), "{"); ind >= 0 {
 					cc.postResultChan <- body[ind:]
 				} else {
 					web.SetConfigConn(false)
-					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: <%s>", string(body))
+					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))
 				}
 			} else {
 				web.SetConfigConn(false)
-				return fmt.Errorf("Ошибка чтения ответа http запроса. Тело пакета: <%s>. Ошибка: <%s>", string(body), readErr.Error())
+				return fmt.Errorf("Ошибка чтения ответа http запроса. Тело пакета: %s. Ошибка: %s", string(body), readErr.Error())
 			}
 		} else {
 			web.SetConfigConn(false)
-			return fmt.Errorf("HTPP запрос выполнен с ошибкой. Запрос: <%s>. URL: <%s>. Статус ответа: <%s>",
+			return fmt.Errorf("HTPP запрос выполнен с ошибкой. Запрос: %s. URL: %s. Статус ответа: %s",
 				jsonValue, url, resp.Status)
 		}
 	} else {
 		web.SetConfigConn(false)
-		return fmt.Errorf("Ошибка выполнения HTPP запроса. Запрос: <%s>. URL: <%s>. Ошибка: <%s>",
+		return fmt.Errorf("Ошибка выполнения HTPP запроса. Запрос: %s. URL: %s. Ошибка: %s",
 			jsonValue, url, postErr.Error())
 	}
 
@@ -201,33 +187,23 @@ func (cc *ChiefConfigutarorClient) postToConfigurator(url string, msg interface{
 
 // инициализация после получений настроек
 func (cc *ChiefConfigutarorClient) initBeforeGetSettings() {
-	var versErr, dockErr error
+	logger.SetDebugParam(dbgChannelVersions, "-", logger.StateDefaultColor)
 
-	if DockerVersion, dockErr = utils.GetDockerVersion(); dockErr != nil {
-		WorkWithDocker = false
-		web.SetDockerVersion("???")
+	if cc.withDocker == false {
 
-		if ChannelVersions, versErr = utils.GetChannelVersions(); versErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-				"Ошибка получения списка версий приложения <FMTP канал>. Ошибка: <%s>.", versErr.Error()))
+		if ChannelVersions, versErr := utils.GetChannelVersions(); versErr != nil {
+			logger.PrintfErr("Ошибка получения списка версий приложения <FMTP канал>. Ошибка: %v", versErr)
 		} else {
-			web.SetChannelVersions(fmt.Sprintf("%v", ChannelVersions))
-			cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(
-				"Получены версии приложения <FMTP канал>. Версии: <%s>.", ChannelVersions))
+			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", ChannelVersions), logger.StateDefaultColor)
+			logger.PrintfInfo("Получены версии приложения <FMTP канал>. Версии: %s.", ChannelVersions)
 		}
 	} else {
-		WorkWithDocker = true
-		web.SetDockerVersion(DockerVersion)
-		cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(
-			"Получена версия сервиса Docker. Версия: <%s>.", DockerVersion))
-
-		if ChannelVersions, versErr = utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-				"Ошибка получения списка версий docker образов <FMTP канал>. Ошибка: <%s>.", versErr.Error()))
+		if ChannelVersions, versErr := utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
+			logger.PrintfErr(
+				"Ошибка получения списка версий docker образов 'FMTP канал'. Ошибка: %v", versErr)
 		} else {
-			web.SetChannelVersions(fmt.Sprintf("%v", ChannelVersions))
-			cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(
-				"Получены версии doсker образов приложения <FMTP канал>. Версии: <%s>.", ChannelVersions))
+			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", ChannelVersions), logger.StateDefaultColor)
+			logger.PrintfInfo("Получены версии doсker образов приложения 'FMTP канал'. Версии: %s", ChannelVersions)
 		}
 	}
 }
@@ -235,26 +211,22 @@ func (cc *ChiefConfigutarorClient) initBeforeGetSettings() {
 // инициализация после получений настроек
 func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
 
-	if WorkWithDocker {
+	if cc.withDocker {
 
 		// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
 		if stopErr := utils.StopAndRmContainers(ChannelImageName); stopErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-				"Ошибка остановки и удаления docker контейнеров приложения <FMTP канал>. Ошибка: <%s>.", stopErr.Error()))
+			logger.PrintfErr("Ошибка остановки и удаления docker контейнеров приложения 'FMTP канал'. Ошибка: %s.", stopErr.Error())
 		}
 
 		// выкачиваем docker образы из репозитория
 		if pullErr := utils.DockerPullImages(ChiefCfg.DockerRegistry + ""); pullErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-				"Ошибка загрузки образов (pull) docker приложения 'FMTP канал'. Ошибка: <%s>", pullErr.Error()))
+			logger.PrintfErr("Ошибка загрузки образов (pull) docker приложения 'FMTP канал'. Ошибка: %s", pullErr.Error())
 		}
 
 		// поучаем список текущих версий
 		if newVersions, versErr := utils.GetChannelVersions(); versErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf(
-				"Ошибка получения списка версий docker образов приложения <FMTP канал> (Повторный запрос). Ошибка: <%s>.", versErr.Error()))
+			logger.PrintfErr("Ошибка получения списка версий docker образов приложения 'FMTP канал' (Повторный запрос). Ошибка: %s.", versErr.Error())
 		} else {
-			web.SetChannelVersions(fmt.Sprintf("%v", ChannelVersions))
 			// если пойвились новые версии, заново запрашиваем настройки
 			if !reflect.DeepEqual(ChannelVersions, newVersions) {
 				ChannelVersions = newVersions

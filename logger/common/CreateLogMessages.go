@@ -26,7 +26,7 @@ func LogChannelSTDT(severity string, fmtpType string, direction string, text str
 		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
 }
 
-// сообщение с использование IST (ID-Severity-Text)
+// сообщение с использование ST (Severity-Text)
 func LogCntrlST(severity string, text string) LogMessage {
 	return LogMessage{
 		ChannelId: NoChannelIdent,
@@ -37,7 +37,6 @@ func LogCntrlST(severity string, text string) LogMessage {
 		Text:      text,
 		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
 }
-
 
 // сообщение с использование STDT (Severity-Type-Direction-Text)
 func LogCntrlSTDT(severity string, fmtpType string, direction string, text string) LogMessage {

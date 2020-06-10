@@ -9,8 +9,7 @@ import (
 
 	"fdps/fmtp/logger/file"
 	"fdps/fmtp/logger/oracle"
-
-	"fdps/fmtp/web_sock"
+	"fdps/utils/web_sock"
 )
 
 // контроллер, отвечающий за считывание настроек из файла и

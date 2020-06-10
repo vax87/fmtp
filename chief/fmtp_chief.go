@@ -1,80 +1,47 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"sort"
-	"sync"
-	"time"
-
-	"github.com/phf/go-queue/queue"
 
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/aodb"
+	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief/heartbeat"
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/chief_logger"
-	"fdps/fmtp/logger/common"
 	"fdps/fmtp/utils"
 	"fdps/fmtp/web"
-	"fdps/fmtp/web_sock"
+
 	ut2 "fdps/utils"
 	"fdps/utils/logger"
 	"fdps/utils/logger/log_ljack"
 	"fdps/utils/logger/log_std"
 	"fdps/utils/logger/log_web"
+	"fdps/utils/web_sock"
 )
 
 const (
-	// максимальное кол-во логов в logCache
-	maxLogQueueSize = 30000
-
-	// максимальное кол-во отправляемых сообщений по сети
-	maxLogSendCount = 20
-)
-
-// клиент для связи с конфигуратором
-var chiefConfClient *chief_configurator.ChiefConfigutarorClient
-
-// клиент для связи с логгером
-var chiefLoggerClient = web_sock.NewWebSockClient()
-
-// контроллер сообщений состояния
-var chiefHeartbeatCntrl = chief_configurator.NewHeartbeatController()
-
-// очередь сообщений для отправки
-var logQueue queue.Queue
-
-// тикер отправки сообщений логгеру
-var loggerTicker *time.Ticker
-
-// сервер WS для подключения AODB провайдера
-var aodbCntrl = aodb.NewController()
-
-// контроллер FMTP каналов
-var channelCntrl = chief_channel.NewChiefChannelServer()
-
-var logQueueLocker sync.Mutex
-
-const (
-	appName    = "fdps-parking"
-	appVersion = "2020-01-14 19:26"
+	appName    = "fdps-fmtp-chief"
+	appVersion = "2020-06-10 15:29"
 )
 
 var workWithDocker bool
 var dockerVersion string
 
+var done = make(chan struct{}, 1)
+var chiefLogger = chief_logger.NewChiefLogger(done)
+
 func initLoggers() {
 	// логгер с web страничкой
 	log_web.Initialize(log_web.LogWebSettings{
-		StartHttp: false,
-		//NetPort:      utils.ParkingWebDefaultPort,
-		LogURLPath:   ut2.FmtpWebLogPath,
+		StartHttp:    false,
+		LogURLPath:   ut2.FmtpChiefWebLogPath,
 		Title:        appName,
 		ShowSetts:    true,
-		SettsURLPath: ut2.FmtpWebConfigPath,
+		SettsURLPath: ut2.FmtpChiefWebConfigPath,
 	})
 	logger.AppendLogger(log_web.WebLogger)
 	ut2.AppendHandler(log_web.WebLogger)
@@ -92,6 +59,10 @@ func initLoggers() {
 	logger.AppendLogger(log_std.LogStd)
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC | log.Llongfile)
+
+	logger.AppendLogger(chiefLogger)
+	go chiefLogger.Work()
+
 }
 
 func initDockerInfo() {
@@ -102,19 +73,6 @@ func initDockerInfo() {
 		workWithDocker = true
 		log_web.SetDockerVersion(dockerVersion)
 	}
-}
-
-// постановка сообщения в очередь.
-func processNewLogMsg(logMsg common.LogMessage) {
-	logQueueLocker.Lock()
-	defer logQueueLocker.Unlock()
-
-	if logQueue.Len() >= maxLogQueueSize {
-		logQueue.PopFront()
-	}
-	logQueue.PushBack(logMsg)
-
-	web.AppendLog(logMsg)
 }
 
 // отправка состояния каналов web страничке
@@ -147,7 +105,7 @@ func sendChannelStatesToWeb(states []channel_state.ChannelState) {
 	sort.Slice(chWebStates, func(i, j int) bool {
 		return chWebStates[i].ChannelID < chWebStates[j].ChannelID
 	})
-	web.SetChannelStates(chWebStates)
+	//web.SetChannelStates(chWebStates)
 }
 
 // отправка состояния провайдеров web страничке
@@ -187,10 +145,20 @@ func main() {
 	web.Initialize(utils.ChiefWebPath, 13002, new(web.ChiefPage))
 	go web.Start()
 
-	// запускаем таймер отправки логов
-	loggerTicker = time.NewTicker(time.Second)
+	done := make(chan struct{})
+	chief_web.Start(done)
 
-	chiefConfClient = chief_configurator.NewChiefClient()
+	// клиент для связи с конфигуратором
+	var chiefConfClient *chief_configurator.ChiefConfigutarorClient
+
+	// сервер WS для подключения AODB провайдера
+	var aodbCntrl = aodb.NewController(done)
+
+	// контроллер FMTP каналов
+	var channelCntrl = chief_channel.NewChiefChannelServer(workWithDocker)
+
+	chiefConfClient = chief_configurator.NewChiefClient(workWithDocker)
+
 	go chiefConfClient.Work()
 	// отправляем запрос настроек контроллера
 	go chiefConfClient.Start()
@@ -202,12 +170,18 @@ func main() {
 		select {
 		// получены настройки каналов
 		case channelSetts := <-chiefConfClient.FmtpChannelSettsChan:
-			go chiefHeartbeatCntrl.Work()
+			heartbeat.SetDockerVersion(dockerVersion)
+			go heartbeat.Work()
 			channelCntrl.ChannelSettsChan <- channelSetts
 
 		// получены настройки логгера
 		case loggerSetts := <-chiefConfClient.LoggerSettsChan:
-			go chiefLoggerClient.Work(web_sock.WebSockClientSettings{ServerAddress: "127.0.0.1", ServerPort: loggerSetts.LoggerPort, UrlPath: "/logger"})
+			chiefLogger.SettsChan <- web_sock.WebSockClientSettings{
+				ServerAddress:     "127.0.0.1",
+				ServerPort:        loggerSetts.LoggerPort,
+				UrlPath:           ut2.FmtpLoggerWsPath,
+				ReconnectInterval: 3,
+			}
 
 		// получены настройки провайера AODB
 		case providerSetts := <-chiefConfClient.ProviderSettsChan:
@@ -222,88 +196,29 @@ func main() {
 			}
 			aodbCntrl.ProviderSettsChan <- aodbSettings
 
-		// получено сообщение для журнала
-		case chiefConfLog := <-chiefConfClient.LogChan:
-			processNewLogMsg(chiefConfLog)
-
 		// получены данные от провайдера AODB
 		case aodbData := <-aodbCntrl.FromAODBDataChan:
 			channelCntrl.IncomeAodbPacketChan <- aodbData
 
-		// ошибка в работе клиента логгера
-		case curErr := <-chiefLoggerClient.ErrorChan:
-			var curLogMsg common.LogMessage
-			if curErr == nil {
-				web.SetLoggerState(true)
-				curLogMsg = common.LogCntrlST(common.SeverityInfo, "Установлено сетевое соединение с сервисом записи событий журнала.")
-			} else {
-				web.SetLoggerState(false)
-				curLogMsg = common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Возникла ошибка при работе с сервисом записи событий журнала. Ошибка: <%s>.", curErr.Error()))
-				chiefHeartbeatCntrl.LoggerErrChan <- curErr
-			}
-			processNewLogMsg(curLogMsg)
-
-		// считанные данные из клиента логгера
-		case curData := <-chiefLoggerClient.ReceiveDataChan:
-			var stateMsg chief_logger.LoggerStateMessage
-			if unmErr := json.Unmarshal(curData, &stateMsg); unmErr == nil {
-				chiefHeartbeatCntrl.LoggerStateChan <- stateMsg.LoggerState
-			}
-
-		// сработал тикер отправки логов
-		case <-loggerTicker.C:
-			if chiefLoggerClient.IsConnected() && logQueue.Len() > 0 {
-
-				logMsg := chief_logger.LoggerMsgSlice{MessageHeader: chief_logger.MessageHeader{Header: chief_logger.LogMessagesHeader}}
-
-				for nn := 0; nn < maxLogSendCount; nn++ {
-					if logQueue.Len() > 0 {
-						curLogMsg := common.LogMessage(logQueue.PopFront().(common.LogMessage))
-						curLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
-						logMsg.Messages = append(logMsg.Messages, curLogMsg)
-					} else {
-						break
-					}
-				}
-
-				if len(logMsg.Messages) > 0 {
-					dataToSend, err := json.Marshal(logMsg)
-					if err == nil {
-						chiefLoggerClient.SendDataChan <- dataToSend
-					} else {
-						log.Println("Ошибка маршаллинга сообщения логов. Ошибка:", err.Error())
-					}
-				}
-			}
-
-			// сообщение о состоянии контроллера
-		case curMsg := <-chiefHeartbeatCntrl.HeartbeatChannel:
+		// сообщение о состоянии контроллера
+		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
 			chiefConfClient.HeartbeatChan <- curMsg
 
 		// AODB пакет от контроллера каналов
 		case aodbData := <-channelCntrl.OutAodbPacketChan:
 			aodbCntrl.ToAODBDataChan <- aodbData
 
-		// сообщение журнала от контроллера AODB
-		case curLog := <-aodbCntrl.LogChan:
-			processNewLogMsg(curLog)
-
 		// состояние провайдера AODB
 		case curAodbState := <-aodbCntrl.ProviderStatesChan:
-			chiefHeartbeatCntrl.AODBStateChan <- curAodbState
-
-			sendProviderStatesToWeb(curAodbState)
+			heartbeat.SetAodbProviderState(curAodbState)
 
 		// сообщение журнала от контроллера каналов
-		case curLog := <-channelCntrl.LogChan:
-			processNewLogMsg(curLog)
+		case _ = <-channelCntrl.LogChan:
+			//processNewLogMsg(curLog)
 
 		// получено состояние каналов
-		case curStates := <-channelCntrl.ChannelStates:
-			chiefHeartbeatCntrl.ChannelStateChan <- curStates
-
-			sendChannelStatesToWeb(curStates)
+		case curChannelStates := <-channelCntrl.ChannelStates:
+			heartbeat.SetChannelsState(curChannelStates)
 		}
 	}
 }
