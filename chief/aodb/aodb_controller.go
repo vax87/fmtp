@@ -15,11 +15,11 @@ import (
 const stateTickerInt = time.Second
 
 const (
-	srvStateKey       = "AODB WS. Состояние:"
-	srvLastConnKey    = "AODB WS. Последнее клиентское подключение:"
-	srvLastDisconnKey = "AODB WS. Последнее клиентское отключение:"
-	srvLastErrKey     = "AODB WS. Последняя ошибка:"
-	srvClntListKey    = "AODB WS. Список клиентов:"
+	srvStateKey = "AODB WS. Состояние:"
+	// srvLastConnKey    = "AODB WS. Последнее клиентское подключение:"
+	// srvLastDisconnKey = "AODB WS. Последнее клиентское отключение:"
+	// srvLastErrKey     = "AODB WS. Последняя ошибка:"
+	//srvClntListKey    = "AODB WS. Список клиентов:"
 
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
@@ -83,14 +83,14 @@ func (c *Controller) Work() {
 		// получен подключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntConnChan:
 			logger.PrintfInfo("Подключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
-			logger.SetDebugParam(srvLastConnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
-			logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
+			//logger.SetDebugParam(srvLastConnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
+			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntDisconnChan:
 			logger.PrintfInfo("Отключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
-			logger.SetDebugParam(srvLastDisconnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
-			logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
+			//logger.SetDebugParam(srvLastDisconnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
+			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отклоненный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntRejectChan:
@@ -99,7 +99,7 @@ func (c *Controller) Work() {
 		// получена ошибка от WS сервера
 		case wsErr := <-c.wsServer.ErrorChan:
 			logger.PrintfErr("Возникла ошибка при работе WS сервера AODB. Ошибка: %s.", wsErr.Error())
-			logger.SetDebugParam(srvLastErrKey, wsErr.Error(), logger.StateErrorColor)
+			//logger.SetDebugParam(srvLastErrKey, wsErr.Error(), logger.StateErrorColor)
 
 		// получены данные от WS сервера
 		case curWsPkg := <-c.wsServer.ReceiveDataChan:

@@ -127,5 +127,10 @@ func (l ChiefLogger) SetDbStats(dbStat sql.DBStats) {
 }
 
 // SetMinSeverity задать серъезность, начиная с которой будут вестись логи
-func (s ChiefLogger) SetMinSeverity(sev logger.Severity) {
+func (l ChiefLogger) SetMinSeverity(sev logger.Severity) {
+}
+
+// PrintfInfoDirType - добавление в журнал сообщения с fmtp типом и направлением
+func (l ChiefLogger) PrintfInfoDirType(fmtpType string, direction string, format string, a ...interface{}) {
+	l.processNewLogMsg(common.LogCntrlSTDT(common.SeverityInfo, fmtpType, direction, fmt.Sprintf(format, a...)))
 }

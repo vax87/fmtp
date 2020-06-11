@@ -9,7 +9,7 @@ import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/logger/common"
-	"fdps/fmtp/utils"
+	"fdps/utils"
 )
 
 // Settings настройки контроллера(chief)
@@ -50,7 +50,7 @@ func (s *ChiefSettings) SaveToFile() error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(chiefSettingsFile, utils.JSONPrettyPrint(confData), os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(chiefSettingsFile, utils.JsonPrettyPrint(confData), os.ModePerm); err != nil {
 		return err
 	}
 	return nil

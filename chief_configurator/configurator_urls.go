@@ -10,9 +10,9 @@ import (
 // ConfiguratorUrls URL для взаимодействия конфигуратора.
 type ConfiguratorUrls struct {
 	HeartbeatURLStr string   `json:"HeartbeatUrl"` // url, на который отправляется сообщение о состоянии
-	HeartbeatURL    *url.URL `json:"",omitempty`
+	HeartbeatURL    *url.URL `json:"-"`
 	SettingsURLStr  string   `json:"SettingsUrl"` // url, на который отправляется запрос настроек
-	SettingsURL     *url.URL `json:"",omitempty`
+	SettingsURL     *url.URL `json:"-"`
 }
 
 var confFilePath = utils.AppPath() + "/config/config_urls.json"

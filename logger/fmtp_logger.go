@@ -9,7 +9,6 @@ import (
 	"fdps/fmtp/logger/file"
 	"fdps/fmtp/logger/logger_settings"
 	"fdps/fmtp/logger/oracle"
-	"fdps/fmtp/utils"
 	"fdps/fmtp/web"
 	"fmt"
 	"log"
@@ -53,11 +52,11 @@ func settingsRoutine() {
 }
 
 func main() {
-	web.Initialize(utils.LoggerWebPath, 13001, new(web.LoggerPage))
+	web.Initialize("/log", 13001, new(web.LoggerPage))
 	go web.Start()
 
 	// подпрограмма для контроллера сети
-	go netController.Work(utils.LoggerURLPath)
+	go netController.Work("/logger")
 
 	// подпрограмма для контроллера логов(запись в файлы)
 	go fileLogCntrl.Run()

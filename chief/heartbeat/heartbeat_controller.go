@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	CommonStateOk    = "ok"
-	CommonStateError = "error"
+	commonStateOk    = "ok"
+	commonStateError = "error"
 )
 
 // HeartbeatController контроллер отвечает за прием сообщений о состоянии от
@@ -21,19 +21,22 @@ type HeartbeatController struct {
 	HeartbeatChannel chan chief_configurator.HeartbeatMsg
 	sendTicker       *time.Ticker
 	curHeartbeatMsg  chief_configurator.HeartbeatMsg
-	dockerVersion    string
 }
 
+// HeartbeatCntrl - экземпляр контроллера
 var HeartbeatCntrl = newHeartbeatController()
 
+// SetDockerVersion - задать версию docker сервиса
 func SetDockerVersion(dockerVers string) {
-	HeartbeatCntrl.dockerVersion = dockerVers
+	HeartbeatCntrl.curHeartbeatMsg.DockerVersion = dockerVers
 }
 
+// SetLoggerState - задать состояние подключения к логгеру
 func SetLoggerState(loggerState common.LoggerState) {
 	HeartbeatCntrl.curHeartbeatMsg.LoggerState = loggerState
 }
 
+// SetAodbProviderState - задать состояния FDPS провайдеров
 func SetAodbProviderState(aodbState []fdps.ProviderState) {
 	var resStates []fdps.ProviderState
 	for _, val := range HeartbeatCntrl.curHeartbeatMsg.ProviderStates {
@@ -45,6 +48,7 @@ func SetAodbProviderState(aodbState []fdps.ProviderState) {
 	HeartbeatCntrl.curHeartbeatMsg.ProviderStates = resStates
 }
 
+// SetChannelsState - задать состояния FMTP каналов
 func SetChannelsState(channelsState []channel_state.ChannelState) {
 	HeartbeatCntrl.curHeartbeatMsg.ChannelStates = channelsState
 }
@@ -55,7 +59,7 @@ func newHeartbeatController() *HeartbeatController {
 		HeartbeatChannel: make(chan chief_configurator.HeartbeatMsg, 10),
 		sendTicker:       time.NewTicker(time.Second),
 		curHeartbeatMsg: chief_configurator.HeartbeatMsg{MessageHeader: chief_configurator.MessageHeader{Header: chief_configurator.HeartbeatHeader},
-			CommonState: CommonStateError,
+			CommonState: commonStateError,
 		},
 	}
 }
@@ -67,11 +71,11 @@ func Work() {
 	HeartbeatCntrl.curHeartbeatMsg.CntrlID = chief_configurator.ChiefCfg.CntrlID
 	HeartbeatCntrl.curHeartbeatMsg.IPAddr = chief_configurator.ChiefCfg.IPAddr
 	HeartbeatCntrl.curHeartbeatMsg.ControllerVersion = "???"
-	HeartbeatCntrl.curHeartbeatMsg.DockerVersion = HeartbeatCntrl.dockerVersion
+	HeartbeatCntrl.curHeartbeatMsg.DockerVersion = "???"
 
 	HeartbeatCntrl.curHeartbeatMsg.LoggerState = common.LoggerState{
-		LoggerConnected:   CommonStateError,
-		LoggerDbConnected: CommonStateError,
+		LoggerConnected:   commonStateError,
+		LoggerDbConnected: commonStateError,
 		LoggerVersion:     "???",
 	}
 
@@ -81,56 +85,33 @@ func Work() {
 				ProviderID:    val.ID,
 				ProviderType:  val.DataType,
 				ProviderIPs:   val.IPAddresses,
-				ProviderState: CommonStateError,
+				ProviderState: commonStateError,
 			})
 	}
 
 	for {
 		select {
-		// принято состояние логгера
-		// case curLogStateMgs := <-HeartbeatCntrl.LoggerStateChan:
-		// 	HeartbeatCntrl.curHeartbeatMsg.LoggerState = curLogStateMgs
-
-		// принята ошибка подключения к логгеру
-		// case curErr := <-HeartbeatCntrl.LoggerErrChan:
-		// 	HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerConnected = common.LoggerStateError
-		// 	HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerDbError = curErr.Error()
-
-		// принято состояние FMTP канала
-		// case channelMgs := <-HeartbeatCntrl.ChannelStateChan:
-		// 	HeartbeatCntrl.curHeartbeatMsg.ChannelStates = channelMgs
-
-		// принято состояние FDPS провайдеров
-		// case aodbStates := <-HeartbeatCntrl.AODBStateChan:
-		// 	var resStates []fdps.ProviderState
-		// 	for _, val := range HeartbeatCntrl.curHeartbeatMsg.ProviderStates {
-		// 		if val.ProviderType == fdps.OLDIProvider {
-		// 			resStates = append(resStates, val)
-		// 		}
-		// 	}
-		// 	resStates = append(resStates, aodbStates...)
-		// 	HeartbeatCntrl.curHeartbeatMsg.ProviderStates = resStates
 
 		// сработал таймер отправки собщения о состоянии
 		case <-HeartbeatCntrl.sendTicker.C:
-			HeartbeatCntrl.curHeartbeatMsg.CommonState = CommonStateOk
+			HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateOk
 		CHSTL:
 			for _, it := range HeartbeatCntrl.curHeartbeatMsg.ChannelStates {
 				if it.FmtpState != channel_state.ChannelStateOk {
-					HeartbeatCntrl.curHeartbeatMsg.CommonState = CommonStateError
+					HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateError
 					break CHSTL
 				}
 			}
 
 			if HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerConnected != common.LoggerStateOk ||
 				HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerDbConnected != common.LoggerStateOk {
-				HeartbeatCntrl.curHeartbeatMsg.CommonState = CommonStateError
+				HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateError
 			}
 
 		PVSTL:
 			for _, it := range HeartbeatCntrl.curHeartbeatMsg.ProviderStates {
 				if it.ProviderState != fdps.ProviderStateOk {
-					HeartbeatCntrl.curHeartbeatMsg.CommonState = CommonStateError
+					HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateError
 					break PVSTL
 				}
 			}

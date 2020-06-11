@@ -12,10 +12,9 @@ import (
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/chief_logger"
-	"fdps/fmtp/utils"
 	"fdps/fmtp/web"
 
-	ut2 "fdps/utils"
+	"fdps/utils"
 	"fdps/utils/logger"
 	"fdps/utils/logger/log_ljack"
 	"fdps/utils/logger/log_std"
@@ -38,13 +37,13 @@ func initLoggers() {
 	// логгер с web страничкой
 	log_web.Initialize(log_web.LogWebSettings{
 		StartHttp:    false,
-		LogURLPath:   ut2.FmtpChiefWebLogPath,
+		LogURLPath:   utils.FmtpChiefWebLogPath,
 		Title:        appName,
 		ShowSetts:    true,
-		SettsURLPath: ut2.FmtpChiefWebConfigPath,
+		SettsURLPath: utils.FmtpChiefWebConfigPath,
 	})
 	logger.AppendLogger(log_web.WebLogger)
-	ut2.AppendHandler(log_web.WebLogger)
+	utils.AppendHandler(log_web.WebLogger)
 	log_web.SetVersion(appVersion)
 
 	// логгер с сохранением в файлы
@@ -65,14 +64,16 @@ func initLoggers() {
 
 }
 
-func initDockerInfo() {
+func initDockerInfo() bool {
 	if dockerVersion, dockErr := utils.GetDockerVersion(); dockErr != nil {
 		log_web.SetDockerVersion("???")
 		logger.PrintfErr(dockErr.Error())
+		return false
 	} else {
 		workWithDocker = true
 		log_web.SetDockerVersion(dockerVersion)
 	}
+	return true
 }
 
 // отправка состояния каналов web страничке
@@ -140,9 +141,17 @@ func sendProviderStatesToWeb(states []fdps.ProviderState) {
 
 func main() {
 	initLoggers()
-	initDockerInfo()
+	if initDockerInfo() == false {
+		utils.InitFileBinUtils(
+			utils.AppPath()+"/versions",
+			utils.AppPath()+"/runningChannels",
+			".exe",
+			"fmtp_channel",
+			"FMTP канал",
+		)
+	}
 
-	web.Initialize(utils.ChiefWebPath, 13002, new(web.ChiefPage))
+	web.Initialize("chief", 13002, new(web.ChiefPage))
 	go web.Start()
 
 	done := make(chan struct{})
@@ -155,7 +164,7 @@ func main() {
 	var aodbCntrl = aodb.NewController(done)
 
 	// контроллер FMTP каналов
-	var channelCntrl = chief_channel.NewChiefChannelServer(workWithDocker)
+	var channelCntrl = chief_channel.NewChiefChannelServer(done, workWithDocker)
 
 	chiefConfClient = chief_configurator.NewChiefClient(workWithDocker)
 
@@ -179,7 +188,7 @@ func main() {
 			chiefLogger.SettsChan <- web_sock.WebSockClientSettings{
 				ServerAddress:     "127.0.0.1",
 				ServerPort:        loggerSetts.LoggerPort,
-				UrlPath:           ut2.FmtpLoggerWsPath,
+				UrlPath:           utils.FmtpLoggerWsPath,
 				ReconnectInterval: 3,
 			}
 
@@ -211,10 +220,6 @@ func main() {
 		// состояние провайдера AODB
 		case curAodbState := <-aodbCntrl.ProviderStatesChan:
 			heartbeat.SetAodbProviderState(curAodbState)
-
-		// сообщение журнала от контроллера каналов
-		case _ = <-channelCntrl.LogChan:
-			//processNewLogMsg(curLog)
 
 		// получено состояние каналов
 		case curChannelStates := <-channelCntrl.ChannelStates:
