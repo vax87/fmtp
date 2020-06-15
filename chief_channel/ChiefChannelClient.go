@@ -1,7 +1,12 @@
 package chief_channel
 
 import (
+	"encoding/json"
 	"fdps/fmtp/logger/common"
+	"fdps/fmtp/web"
+	"fdps/utils"
+	"fdps/utils/web_sock"
+	"fmt"
 )
 
 // ClientSettings настройки клиента контроллера каналов
@@ -20,17 +25,17 @@ type Client struct {
 
 	SettChan chan ClientSettings
 	setts    ClientSettings // текущие настройки канала
-	//ws       *web_sock.WebSockClient
+	ws       *web_sock.WebSockClient
 }
 
 // NewChiefChannelClient конструктор
-func NewChiefChannelClient() *Client {
+func NewChiefChannelClient(done chan struct{}) *Client {
 	return &Client{
 		LogChan:     make(chan common.LogMessage, 100),
 		ReceiveChan: make(chan []byte, 1024),
 		SendChan:    make(chan []byte, 1024),
 		SettChan:    make(chan ClientSettings),
-		//ws:          web_sock.NewWebSockClient(),
+		ws:          web_sock.NewWebSockClient(done),
 	}
 }
 
@@ -42,36 +47,43 @@ func (c *Client) Work() {
 		case newSetts := <-c.SettChan:
 			if c.setts != newSetts {
 				c.setts = newSetts
-				//go c.ws.Work(web_sock.WebSockClientSettings{ServerAddress: newSetts.ChiefAddress, ServerPort: newSetts.ChiefPort, UrlPath: utils.ChannelURLPath})
+				go c.ws.Work(web_sock.WebSockClientSettings{ServerAddress: newSetts.ChiefAddress, ServerPort: newSetts.ChiefPort, UrlPath: utils.FmtpChannelWsUrlPath})
 			}
 
 		// данные для отправки
 		case _ = <-c.SendChan:
-			//case toChiefData := <-c.SendChan:
-			//c.ws.SendDataChan <- toChiefData
+		case toChiefData := <-c.SendChan:
+			c.ws.SendDataChan <- toChiefData
 
-			// полученные данные от chief
-			//case fromChiefData := <-c.ws.ReceiveDataChan:
-			//	c.ReceiveChan <- fromChiefData
+		// полученные данные от chief
+		case fromChiefData := <-c.ws.ReceiveDataChan:
+			c.ReceiveChan <- fromChiefData
 
-			// ошибка WS
-			// case wsErr := <-c.ws.ErrorChan:
-			// 	if wsErr == nil {
-			// 		web.SetChiefConn(true)
-			// 		c.LogChan <- common.LogChannelST(common.SeverityInfo,
-			// 			fmt.Sprintf("Запущен FMTP канал id = <%d>.", c.setts.ChannelID))
+		// изменено сотсояние подключения
+		case wsState := <-c.ws.StateChan:
+			if wsState == web_sock.ClientConnected {
+				web.SetChiefConn(true)
+				c.LogChan <- common.LogChannelST(common.SeverityInfo,
+					fmt.Sprintf("Запущен FMTP канал id = <%d>.", c.setts.ChannelID))
 
-			// 		if dataToSend, err := json.Marshal(CreateSettingsRequestMsg(c.setts.ChannelID)); err == nil {
-			// 			c.LogChan <- common.LogChannelST(common.SeverityInfo,
-			// 				fmt.Sprintf("Запрос настроек от FMTP канала id = <%d>.", c.setts.ChannelID))
+				if dataToSend, err := json.Marshal(CreateSettingsRequestMsg(c.setts.ChannelID)); err == nil {
+					c.LogChan <- common.LogChannelST(common.SeverityInfo,
+						fmt.Sprintf("Запрос настроек от FMTP канала id = <%d>.", c.setts.ChannelID))
 
-			// 			c.SendChan <- dataToSend
-			// 		}
-			// 	} else {
-			// 		web.SetChiefConn(false)
-			// 		c.LogChan <- common.LogChannelST(common.SeverityError,
-			// 			fmt.Sprintf("Ошибка сетевого взаимодействия FMTP канала и контроллера. Ошибка: <%s>.", wsErr.Error()))
-			// 	}
+					c.SendChan <- dataToSend
+				}
+			} else if wsState == web_sock.ClientDisconnected {
+				web.SetChiefConn(false)
+			}
+
+			c.LogChan <- common.LogChannelST(common.SeverityInfo,
+				fmt.Sprintf("Изменено состояние подключения FMTP канала в контроллеру. Id канала = %d. Состояние: %v", c.setts.ChannelID, wsState))
+
+		// ошибка WS
+		case wsErr := <-c.ws.ErrorChan:
+
+			c.LogChan <- common.LogChannelST(common.SeverityError,
+				fmt.Sprintf("Ошибка сетевого взаимодействия FMTP канала и контроллера. Ошибка: <%s>.", wsErr.Error()))
 
 		}
 	}

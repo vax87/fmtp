@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/gorilla/websocket"
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
@@ -23,6 +24,12 @@ import (
 	"fdps/utils"
 	"fdps/utils/logger"
 	"fdps/utils/web_sock"
+)
+
+const (
+	srvStateKey        = "WS FMTP каналов. Состояние:"
+	srvStateOkValue    = "Запущен."
+	srvStateErrorValue = "Не запущен."
 )
 
 // сведения об исполняемом файле канала
@@ -51,8 +58,7 @@ type ChiefChannelServer struct {
 
 	wsServer *web_sock.WebSockServer
 
-	wsClients map[int]*web_sock.WebSockClient
-	//wsClients map[int]*websocket.Conn
+	wsClients map[int]*websocket.Conn
 
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
@@ -78,7 +84,7 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 		killerChan:           make(chan struct{}),
 		ChannelBinMap:        make(map[int]сhannelBin),
 		wsServer:             web_sock.NewWebSockServer(done),
-		wsClients:            make(map[int]*web_sock.WebSockClient),
+		wsClients:            make(map[int]*websocket.Conn),
 		chStates:             make(map[int]сhannelStateTime),
 		aodbIdent:            1,
 		withDocker:           workWithDocker,
@@ -243,107 +249,123 @@ func (cc *ChiefChannelServer) Work() {
 
 			}
 
-			// получены данные от WS сервера
-			// case curWsPkg := <-cc.ws.ReceiveDataChan:
-			// 	var curHdr HeaderMsg
-			// 	var unmErr error
-			// 	if unmErr = json.Unmarshal(curWsPkg.Data, &curHdr); unmErr == nil {
-			// 		switch curHdr.Header {
+		// получены данные от WS сервера
+		case curWsPkg := <-cc.wsServer.ReceiveDataChan:
+			var curHdr HeaderMsg
+			var unmErr error
+			if unmErr = json.Unmarshal(curWsPkg.Data, &curHdr); unmErr == nil {
+				switch curHdr.Header {
 
-			// 		case RequestSettingsHeader:
-			// 			var reqSettsMsg SettingsRequestMsg
-			// 			if err := json.Unmarshal(curWsPkg.Data, &reqSettsMsg); err == nil {
-			// 				cc.wsClients[reqSettsMsg.ChannelID] = curWsPkg.Sock
+				case RequestSettingsHeader:
+					var reqSettsMsg SettingsRequestMsg
+					if err := json.Unmarshal(curWsPkg.Data, &reqSettsMsg); err == nil {
+						cc.wsClients[reqSettsMsg.ChannelID] = curWsPkg.Sock
 
-			// 				var channelSetts channel_settings.ChannelSettings
-			// 			SETTSL:
-			// 				for _, curSetts := range cc.channelSetts.ChSettings {
-			// 					if curSetts.Id == reqSettsMsg.ChannelID {
-			// 						channelSetts = curSetts
-			// 						break SETTSL
-			// 					}
-			// 				}
+						var channelSetts channel_settings.ChannelSettings
+					SETTSL:
+						for _, curSetts := range cc.channelSetts.ChSettings {
+							if curSetts.Id == reqSettsMsg.ChannelID {
+								channelSetts = curSetts
+								break SETTSL
+							}
+						}
 
-			// 				if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
-			// 					cc.ws.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
-			// 				}
-			// 			}
+						if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
+							cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
+						}
+					}
 
-			// 		case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
-			// 			var curHbtMsg ChannelHeartbeatMsg
-			// 			if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
-			// 				cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
-			// 			}
+				case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
+					var curHbtMsg ChannelHeartbeatMsg
+					if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
+						cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
+					}
 
-			// 			// отправляем heartbeat контроллеру
-			// 			var chStateSlice []channel_state.ChannelState
-			// 			for key := range cc.chStates {
-			// 				chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
-			// 			}
-			// 			cc.ChannelStates <- chStateSlice
+					// отправляем heartbeat контроллеру
+					var chStateSlice []channel_state.ChannelState
+					for key := range cc.chStates {
+						chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
+					}
+					cc.ChannelStates <- chStateSlice
 
-			// 		case ChannelLogHeader:
-			// 			var curLogMsg ChannelLogMsg
-			// 			if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
-			// 				cc.LogChan <- curLogMsg.LogMessage
-			// 			}
+				case ChannelLogHeader:
+					var curLogMsg ChannelLogMsg
+					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
+						//cc.LogChan <- curLogMsg.LogMessage
+						if curLogMsg.FmtpType != common.NoneFmtpType {
+							logger.PrintfInfoDirType(curLogMsg.FmtpType, curLogMsg.Direction, curLogMsg.Text)
+						} else {
+							logger.PrintfInfo(curLogMsg.Text)
+						}
+					}
 
-			// 		case ChannelMessageHeader:
+				case ChannelMessageHeader:
 
-			// 			var dataMsg DataMsg
-			// 			if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
-			// 				var localAtc, remoteAtc string
-			// 				for _, val := range cc.channelSetts.ChSettings {
-			// 					if val.Id == dataMsg.ChannelID {
-			// 						localAtc = val.LocalATC
-			// 						remoteAtc = val.RemoteATC
-			// 						break
-			// 					}
-			// 				}
+					var dataMsg DataMsg
+					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
+						var localAtc, remoteAtc string
+						for _, val := range cc.channelSetts.ChSettings {
+							if val.Id == dataMsg.ChannelID {
+								localAtc = val.LocalATC
+								remoteAtc = val.RemoteATC
+								break
+							}
+						}
 
-			// 				var aodbDataMsg fdps.FdpsAodbPackage
-			// 				aodbDataMsg.MsgHeader = fdps.FdpsDataText
-			// 				aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
-			// 				aodbDataMsg.LocalAtc = localAtc
-			// 				aodbDataMsg.RemoteAtc = remoteAtc
-			// 				aodbDataMsg.Text = dataMsg.Text
+						var aodbDataMsg fdps.FdpsAodbPackage
+						aodbDataMsg.MsgHeader = fdps.FdpsDataText
+						aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
+						aodbDataMsg.LocalAtc = localAtc
+						aodbDataMsg.RemoteAtc = remoteAtc
+						aodbDataMsg.Text = dataMsg.Text
 
-			// 				cc.aodbIdent++
-			// 				if cc.aodbIdent > 100000 {
-			// 					cc.aodbIdent = 1
-			// 				}
+						cc.aodbIdent++
+						if cc.aodbIdent > 100000 {
+							cc.aodbIdent = 1
+						}
 
-			// 				if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-			// 					cc.OutAodbPacketChan <- dataToSend
+						if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
+							cc.OutAodbPacketChan <- dataToSend
 
-			// 					cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
-			// 						fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: <%d>, Лок. ATC: <%s>, Удал. ATC: <%s>, Текст: <%s>.",
-			// 							fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
-			// 				}
-			// 			}
-			// 		}
+							logger.PrintfInfoDirType(fmtp.Operational.ToString(), common.DirectionIncoming,
+								"Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+								fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text)
+						}
+					}
+				}
 
-			// 	} else {
-			// 		cc.LogChan <- common.LogCntrlST(common.SeverityError,
-			// 			fmt.Sprintf("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: <%s>.", unmErr))
-			// 	}
+			} else {
+				logger.PrintfErr("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: %s.", unmErr)
+			}
 
-			// получена ошибка от ws сервера
-			// case wsErr := <-cc.ws.ErrorChan:
-			// 	var curLogMsg common.LogMessage
-			// 	if wsErr == nil {
-			// 		web.SetWSChannelState(true)
-			// 		curLogMsg = common.LogCntrlST(common.SeverityInfo, "Запускаем WS сервер для взаимодействия с FMTP каналами.")
-			// 	} else {
-			// 		web.SetWSChannelState(false)
-			// 		curLogMsg = common.LogCntrlST(common.SeverityError,
-			// 			fmt.Sprintf("Возникла ошибка при работе WS сервера взаимодействия с FMTP каналами. Ошибка: <%s>.", wsErr.Error()))
-			// 	}
-			// 	cc.LogChan <- curLogMsg
+		// получен подключенный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntConnChan:
+			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Подключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			//userhub_web.ClientConn(userhub_web.FromWebSock(curClnt))
 
-			// 	// получено уведомление от ws сервера
-			// case wsInfo := <-cc.ws.InfoChan:
-			// 	cc.LogChan <- common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo)
+		// получен отключенный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntDisconnChan:
+			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Отключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			//userhub_web.ClientDisconn(userhub_web.FromWebSock(curClnt))
+
+		// получен отклоненный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntRejectChan:
+			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Отклонен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+
+		// получена ошибка от WS сервера
+		case wsErr := <-cc.wsServer.ErrorChan:
+			logger.PrintfErr("Возникла ошибка при работе WS сервера для взаимодействия с FMTP каналами. Ошибка: %s.", wsErr.Error())
+
+			// получено состояние работоспособности WS сервера для связи с AFTN каналами
+		case connState := <-cc.wsServer.StateChan:
+			switch connState {
+			case web_sock.ServerTryToStart:
+				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d Path: %s.", cc.channelSetts.ChPort, utils.ParkingClientsPath)
+				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(cc.channelSetts.ChPort)+" Path: "+utils.FmtpChannelWsUrlPath, logger.StateOkColor)
+			case web_sock.ServerError:
+				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
+			}
+
 		}
 	}
 }

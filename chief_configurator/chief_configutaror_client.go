@@ -24,9 +24,6 @@ const dbgChannelVersions = "Версии FMTP каналов"
 // ChiefCfg настройки контроллера каналов(chief)
 var ChiefCfg chief_settings.ChiefSettings = chief_settings.ChiefSettings{CntrlID: -1, IPAddr: "127.0.0.1", IsInitialised: false}
 
-// ChannelVersions список версий приложений/docker бразов FTP канала
-var ChannelVersions []string
-
 // ChannelImageName имя docker образа приложения 'FMTP канал'
 const ChannelImageName = "fmtp_channel"
 
@@ -43,6 +40,8 @@ type ChiefConfigutarorClient struct {
 	readLocalSettingsTimer *time.Timer
 
 	withDocker bool
+
+	channelVersions []string // список версий приложений/docker бразов FMTP канала
 }
 
 // NewChiefClient конструктор клиента
@@ -136,7 +135,7 @@ func (cc *ChiefConfigutarorClient) Start() {
 // отправка запроса настроек конфигуратору
 func (cc *ChiefConfigutarorClient) postSettingsRequest() {
 
-	postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(ChannelVersions))
+	postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
 	if postErr != nil {
 		logger.PrintfErr("Ошибка запроса настроек у конфигуратора. Ошибка: %s", postErr.Error())
 
@@ -189,21 +188,22 @@ func (cc *ChiefConfigutarorClient) postToConfigurator(url string, msg interface{
 func (cc *ChiefConfigutarorClient) initBeforeGetSettings() {
 	logger.SetDebugParam(dbgChannelVersions, "-", logger.StateDefaultColor)
 
-	if cc.withDocker == false {
+	var versErr error
 
-		if ChannelVersions, versErr := utils.GetChannelVersions(); versErr != nil {
-			logger.PrintfErr("Ошибка получения списка версий приложения <FMTP канал>. Ошибка: %v", versErr)
+	if cc.withDocker == false {
+		if cc.channelVersions, versErr = utils.GetChannelVersions(); versErr != nil {
+			logger.PrintfErr("Ошибка получения списка версий приложения 'FMTP канал'. Ошибка: %v", versErr)
 		} else {
-			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", ChannelVersions), logger.StateDefaultColor)
-			logger.PrintfInfo("Получены версии приложения <FMTP канал>. Версии: %s.", ChannelVersions)
+			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", cc.channelVersions), logger.StateDefaultColor)
+			logger.PrintfInfo("Получены версии приложения 'FMTP канал'. Версии: %s.", cc.channelVersions)
 		}
 	} else {
-		if ChannelVersions, versErr := utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
+		if cc.channelVersions, versErr = utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
 			logger.PrintfErr(
 				"Ошибка получения списка версий docker образов 'FMTP канал'. Ошибка: %v", versErr)
 		} else {
-			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", ChannelVersions), logger.StateDefaultColor)
-			logger.PrintfInfo("Получены версии doсker образов приложения 'FMTP канал'. Версии: %s", ChannelVersions)
+			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", cc.channelVersions), logger.StateDefaultColor)
+			logger.PrintfInfo("Получены версии doсker образов приложения 'FMTP канал'. Версии: %s", cc.channelVersions)
 		}
 	}
 }
@@ -227,9 +227,9 @@ func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
 		if newVersions, versErr := utils.GetChannelVersions(); versErr != nil {
 			logger.PrintfErr("Ошибка получения списка версий docker образов приложения 'FMTP канал' (Повторный запрос). Ошибка: %s.", versErr.Error())
 		} else {
-			// если пойвились новые версии, заново запрашиваем настройки
-			if !reflect.DeepEqual(ChannelVersions, newVersions) {
-				ChannelVersions = newVersions
+			// если появились новые версии, заново запрашиваем настройки
+			if !reflect.DeepEqual(cc.channelVersions, newVersions) {
+				cc.channelVersions = newVersions
 				cc.postSettingsRequest()
 			}
 		}

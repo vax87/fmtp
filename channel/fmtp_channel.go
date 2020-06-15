@@ -83,8 +83,10 @@ func mainReturnWithCode() int {
 			return chief_channel.InvalidWebPort
 		}
 
+		done := make(chan struct{})
+
 		// контроллер для работы с контроллером каналов
-		chiefClient = chief_channel.NewChiefChannelClient()
+		chiefClient = chief_channel.NewChiefChannelClient(done)
 	} else {
 		log.Println("FATAL. Invalid ARG count. Get: " + strconv.Itoa(len(os.Args)) + ". Need 8 (_ ChiefPort, ID, LocATC, RemATC, Type, WebPath, WebPort).")
 		return chief_channel.InvalidParamCount
