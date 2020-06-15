@@ -218,13 +218,15 @@ func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
 			logger.PrintfErr("Ошибка остановки и удаления docker контейнеров приложения 'FMTP канал'. Ошибка: %s.", stopErr.Error())
 		}
 
-		// выкачиваем docker образы из репозитория
-		if pullErr := utils.DockerPullImages(ChiefCfg.DockerRegistry + ""); pullErr != nil {
-			logger.PrintfErr("Ошибка загрузки образов (pull) docker приложения 'FMTP канал'. Ошибка: %s", pullErr.Error())
+		if len(ChiefCfg.DockerRegistry) > 0 {
+			// выкачиваем docker образы из репозитория
+			if pullErr := utils.DockerPullImages(ChiefCfg.DockerRegistry + "/" + ChannelImageName); pullErr != nil {
+				logger.PrintfErr("Ошибка загрузки образов (pull) docker приложения 'FMTP канал'. Ошибка: %s", pullErr.Error())
+			}
 		}
 
 		// поучаем список текущих версий
-		if newVersions, versErr := utils.GetChannelVersions(); versErr != nil {
+		if newVersions, versErr := utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
 			logger.PrintfErr("Ошибка получения списка версий docker образов приложения 'FMTP канал' (Повторный запрос). Ошибка: %s.", versErr.Error())
 		} else {
 			// если появились новые версии, заново запрашиваем настройки
