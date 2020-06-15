@@ -79,9 +79,9 @@ func (cc *ChiefConfigutarorClient) Work() {
 						cc.readLocalSettingsTimer.Stop()
 
 						// todo
-						if len(ChiefCfg.DockerRegistry) == 0 {
-							ChiefCfg.DockerRegistry = "di.topaz-atcs.com"
-						}
+						// if len(ChiefCfg.DockerRegistry) == 0 {
+						// 	ChiefCfg.DockerRegistry = "di.topaz-atcs.com"
+						// }
 						// сохраняем настройки в файл
 						ChiefCfg.SaveToFile()
 

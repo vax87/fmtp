@@ -31,7 +31,6 @@ var workWithDocker bool
 var dockerVersion string
 
 var done = make(chan struct{}, 1)
-var chiefLogger = chief_logger.NewChiefLogger(done)
 
 func initLoggers() {
 	// логгер с web страничкой
@@ -59,8 +58,8 @@ func initLoggers() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC | log.Llongfile)
 
-	logger.AppendLogger(chiefLogger)
-	go chiefLogger.Work()
+	logger.AppendLogger(chief_logger.ChiefLog)
+	go chief_logger.ChiefLog.Work()
 
 }
 
@@ -185,7 +184,7 @@ func main() {
 
 		// получены настройки логгера
 		case loggerSetts := <-chiefConfClient.LoggerSettsChan:
-			chiefLogger.SettsChan <- web_sock.WebSockClientSettings{
+			chief_logger.ChiefLog.SettsChan <- web_sock.WebSockClientSettings{
 				ServerAddress:     "127.0.0.1",
 				ServerPort:        loggerSetts.LoggerPort,
 				UrlPath:           utils.FmtpLoggerWsPath,

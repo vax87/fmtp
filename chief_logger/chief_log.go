@@ -31,14 +31,19 @@ type ChiefLogger struct {
 	logQueue     queue.Queue  // очередь сообщений для отправки
 	loggerTicker *time.Ticker // тикер отправки сообщений логгеру
 	loggerClnt   *LoggerClient
+	FmtpLogChan  chan common.LogMessage
 }
 
+var chiefLogDone = make(chan struct{}, 1)
+var ChiefLog = NewChiefLogger()
+
 // NewChiefLogger - конструктор
-func NewChiefLogger(done chan struct{}) *ChiefLogger {
+func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
 		SettsChan:    make(chan web_sock.WebSockClientSettings, 1),
 		loggerTicker: time.NewTicker(time.Second),
-		loggerClnt:   NewLoggerClient(done),
+		loggerClnt:   NewLoggerClient(chiefLogDone),
+		FmtpLogChan:  make(chan common.LogMessage, 10),
 	}
 }
 
@@ -52,6 +57,9 @@ func (l *ChiefLogger) Work() {
 
 		case newSetts := <-l.SettsChan:
 			l.loggerClnt.SettChan <- newSetts
+
+		case curMsg := <-l.FmtpLogChan:
+			l.processNewLogMsg(curMsg)
 
 		// сработал тикер отправки логов
 		case <-l.loggerTicker.C:
@@ -128,9 +136,4 @@ func (l ChiefLogger) SetDbStats(dbStat sql.DBStats) {
 
 // SetMinSeverity задать серъезность, начиная с которой будут вестись логи
 func (l ChiefLogger) SetMinSeverity(sev logger.Severity) {
-}
-
-// PrintfInfoDirType - добавление в журнал сообщения с fmtp типом и направлением
-func (l ChiefLogger) PrintfInfoDirType(fmtpType string, direction string, format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlSTDT(common.SeverityInfo, fmtpType, direction, fmt.Sprintf(format, a...)))
 }

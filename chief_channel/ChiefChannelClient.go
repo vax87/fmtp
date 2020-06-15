@@ -51,7 +51,7 @@ func (c *Client) Work() {
 			}
 
 		// данные для отправки
-		case _ = <-c.SendChan:
+		//case _ = <-c.SendChan:
 		case toChiefData := <-c.SendChan:
 			c.ws.SendDataChan <- toChiefData
 

@@ -19,6 +19,7 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator"
+	"fdps/fmtp/chief_logger"
 	"fdps/fmtp/fmtp"
 	"fdps/fmtp/logger/common"
 	"fdps/utils"
@@ -219,9 +220,10 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg fdps.FdpsAodbPackage
 					unmErr = json.Unmarshal(incomeData, &dataMsg)
 					if unmErr == nil {
-						logger.PrintfInfoDirType(fmtp.Operational.ToString(), common.DirectionIncoming,
-							"Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-							fdps.FdpsAodbService, dataMsg.Ident, dataMsg.LocalAtc, dataMsg.RemoteAtc, dataMsg.Text)
+						chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+							fmtp.Operational.ToString(), common.DirectionIncoming,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+								fdps.FdpsAodbService, dataMsg.Ident, dataMsg.LocalAtc, dataMsg.RemoteAtc, dataMsg.Text))
 						cc.ProcessAodbPacket(dataMsg)
 					} else {
 						logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
@@ -232,8 +234,9 @@ func (cc *ChiefChannelServer) Work() {
 					var accMsg fdps.FdpsAodbAcknowledge
 					unmErr = json.Unmarshal(incomeData, &accMsg)
 					if unmErr == nil {
-						logger.PrintfInfoDirType(fmtp.Operational.ToString(), common.DirectionIncoming,
-							"Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, accMsg.Ident)
+						chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+							fmtp.Operational.ToString(), common.DirectionIncoming,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, accMsg.Ident))
 					} else {
 						logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
 							fdps.FdpsAodbService, string(incomeData), unmErr.Error())
@@ -270,7 +273,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 						}
 
-						if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
+						if settsData, errMarsh := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); errMarsh == nil {
 							cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
 						}
 					}
@@ -292,11 +295,7 @@ func (cc *ChiefChannelServer) Work() {
 					var curLogMsg ChannelLogMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
 						//cc.LogChan <- curLogMsg.LogMessage
-						if curLogMsg.FmtpType != common.NoneFmtpType {
-							logger.PrintfInfoDirType(curLogMsg.FmtpType, curLogMsg.Direction, curLogMsg.Text)
-						} else {
-							logger.PrintfInfo(curLogMsg.Text)
-						}
+						chief_logger.ChiefLog.FmtpLogChan <- curLogMsg.LogMessage
 					}
 
 				case ChannelMessageHeader:
@@ -327,9 +326,10 @@ func (cc *ChiefChannelServer) Work() {
 						if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
 							cc.OutAodbPacketChan <- dataToSend
 
-							logger.PrintfInfoDirType(fmtp.Operational.ToString(), common.DirectionIncoming,
-								"Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-								fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text)
+							chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+								fmtp.Operational.ToString(), common.DirectionIncoming,
+								fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+									fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
 						}
 					}
 				}
@@ -365,7 +365,6 @@ func (cc *ChiefChannelServer) Work() {
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
 			}
-
 		}
 	}
 }
@@ -410,8 +409,8 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 		cc.OutAodbPacketChan <- dataToSend
 	}
 
-	logger.PrintfInfoDirType(common.NoneFmtpType, common.DirectionOutcoming,
-		"Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg)
+	chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
+		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
 }
 
 // останавливаем каналы с указанным ID
@@ -519,10 +518,16 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	}
 
 	curContainerName := "fmtp_channel_" + chSett.LocalATC + "_" + chSett.RemoteATC + "_" + strconv.Itoa(chSett.Id)
+	var imageName string
+
+	if len(chief_configurator.ChiefCfg.DockerRegistry) != 0 {
+		imageName = chief_configurator.ChiefCfg.DockerRegistry + "/"
+	}
+	imageName += chief_configurator.ChannelImageName + ":" + chSett.Version
 
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{
-			Image: chief_configurator.ChiefCfg.DockerRegistry + "/" + chief_configurator.ChannelImageName + ":" + chSett.Version,
+			Image: imageName,
 			Cmd: []string{strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
 				chSett.RemoteATC, chSett.DataType, chSett.URLPath, strconv.Itoa(chSett.URLPort)},
 		},
@@ -533,7 +538,8 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 				Memory:     100 * 1 << 20, // 100 MB
 			},
 			NetworkMode:   "host",
-			RestartPolicy: container.RestartPolicy{Name: "always"},
+			RestartPolicy: container.RestartPolicy{Name: "no"},
+			AutoRemove:    true,
 		},
 		&network.NetworkingConfig{},
 		curContainerName)
