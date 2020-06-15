@@ -528,7 +528,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: imageName,
-			Cmd: []string{"fdps/fmtp_channel", strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
+			Cmd: []string{"/fdps/fmtp_channel", strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
 				chSett.RemoteATC, chSett.DataType, chSett.URLPath, strconv.Itoa(chSett.URLPort)},
 		},
 		&container.HostConfig{
