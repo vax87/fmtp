@@ -48,6 +48,18 @@ func SetAodbProviderState(aodbState []fdps.ProviderState) {
 	HeartbeatCntrl.curHeartbeatMsg.ProviderStates = resStates
 }
 
+// SetOldiProviderState - задать состояния FDPS провайдеров
+func SetOldiProviderState(oldiState []fdps.ProviderState) {
+	var resStates []fdps.ProviderState
+	for _, val := range HeartbeatCntrl.curHeartbeatMsg.ProviderStates {
+		if val.ProviderType == fdps.AODBProvider {
+			resStates = append(resStates, val)
+		}
+	}
+	resStates = append(resStates, oldiState...)
+	HeartbeatCntrl.curHeartbeatMsg.ProviderStates = resStates
+}
+
 // SetChannelsState - задать состояния FMTP каналов
 func SetChannelsState(channelsState []channel_state.ChannelState) {
 	HeartbeatCntrl.curHeartbeatMsg.ChannelStates = channelsState

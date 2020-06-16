@@ -9,6 +9,7 @@ import (
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief/heartbeat"
+	"fdps/fmtp/chief/oldi"
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/chief_logger"
@@ -60,7 +61,6 @@ func initLoggers() {
 
 	logger.AppendLogger(chief_logger.ChiefLog)
 	go chief_logger.ChiefLog.Work()
-
 }
 
 func initDockerInfo() bool {
@@ -159,8 +159,11 @@ func main() {
 	// клиент для связи с конфигуратором
 	var chiefConfClient *chief_configurator.ChiefConfigutarorClient
 
-	// сервер WS для подключения AODB провайдера
+	// сервер WS для подключения AODB провайдеров
 	var aodbCntrl = aodb.NewController(done)
+
+	// TCP сервер для подключения OLDI провайдеров
+	var oldiCntrl = oldi.NewOldiController()
 
 	// контроллер FMTP каналов
 	var channelCntrl = chief_channel.NewChiefChannelServer(done, workWithDocker)
@@ -172,6 +175,7 @@ func main() {
 	go chiefConfClient.Start()
 
 	go aodbCntrl.Work()
+	go oldiCntrl.Work()
 	go channelCntrl.Work()
 
 	for {
@@ -204,13 +208,11 @@ func main() {
 			}
 			aodbCntrl.ProviderSettsChan <- aodbSettings
 
+			oldiCntrl.ProviderSettsChan <- oldiSettings
+
 		// получены данные от провайдера AODB
 		case aodbData := <-aodbCntrl.FromAODBDataChan:
 			channelCntrl.IncomeAodbPacketChan <- aodbData
-
-		// сообщение о состоянии контроллера
-		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
-			chiefConfClient.HeartbeatChan <- curMsg
 
 		// AODB пакет от контроллера каналов
 		case aodbData := <-channelCntrl.OutAodbPacketChan:
@@ -219,6 +221,22 @@ func main() {
 		// состояние провайдера AODB
 		case curAodbState := <-aodbCntrl.ProviderStatesChan:
 			heartbeat.SetAodbProviderState(curAodbState)
+
+		// получены данные от провайдера OLDI
+		case oldiData := <-oldiCntrl.FromOldiDataChan:
+			channelCntrl.IncomeOldiPacketChan <- oldiData
+
+		// OLDI пакет от контроллера каналов
+		case oldiData := <-channelCntrl.OutOldiPacketChan:
+			oldiCntrl.ToOldiDataChan <- oldiData
+
+		// состояние провайдера OLDI
+		case curOldiState := <-oldiCntrl.ProviderStatesChan:
+			heartbeat.SetOldiProviderState(curOldiState)
+
+		// сообщение о состоянии контроллера
+		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
+			chiefConfClient.HeartbeatChan <- curMsg
 
 		// получено состояние каналов
 		case curChannelStates := <-channelCntrl.ChannelStates:

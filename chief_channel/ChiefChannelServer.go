@@ -3,6 +3,7 @@ package chief_channel
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os/exec"
 	"reflect"
@@ -54,6 +55,9 @@ type ChiefChannelServer struct {
 	IncomeAodbPacketChan chan []byte // канал для приема сообщений от провайдера AODB
 	OutAodbPacketChan    chan []byte // канал для отправки сообщений провайдеру AODB
 
+	IncomeOldiPacketChan chan []byte // канал для приема сообщений от провайдера OLDI
+	OutOldiPacketChan    chan []byte // канал для отправки сообщений провайдеру OLDI
+
 	ChannelBinMap map[int]сhannelBin // ключ - идентификатор канала
 	killerChan    chan struct{}      // канал, по которому передается сигнал о завершение работы канала
 
@@ -64,6 +68,7 @@ type ChiefChannelServer struct {
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
 	aodbIdent  int // идентификатор сообщения, отправляемого AODB cервису
+	oldiIdent  int // идентификатор сообщения, отправляемого OLDI cервису
 	withDocker bool
 }
 
@@ -82,6 +87,8 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 		ChannelStates:        make(chan []channel_state.ChannelState, 10),
 		IncomeAodbPacketChan: make(chan []byte, 1024),
 		OutAodbPacketChan:    make(chan []byte, 1024),
+		IncomeOldiPacketChan: make(chan []byte, 1024),
+		OutOldiPacketChan:    make(chan []byte, 1024),
 		killerChan:           make(chan struct{}),
 		ChannelBinMap:        make(map[int]сhannelBin),
 		wsServer:             web_sock.NewWebSockServer(done),
@@ -249,7 +256,26 @@ func (cc *ChiefChannelServer) Work() {
 			} else {
 				logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
 					fdps.FdpsAodbService, string(incomeData), unmErr.Error())
+			}
 
+		// получен новый пакет от провайдера OLDI
+		case incomeOldiData := <-cc.IncomeOldiPacketChan:
+			var oldiPkg fdps.FdpsOldiPackage
+			var oldiAcc fdps.FdpsOldiAcknowledge
+
+			if unmPkgErr := xml.Unmarshal(incomeOldiData, &oldiPkg); unmPkgErr == nil {
+
+				chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+					fmtp.Operational.ToString(), common.DirectionIncoming,
+					fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+						fdps.FdpsAodbService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
+				cc.ProcessOldiPacket(oldiPkg)
+
+			} else if unmAccErr := xml.Unmarshal(incomeOldiData, &oldiAcc); unmAccErr == nil {
+
+				chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+					fmtp.Operational.ToString(), common.DirectionIncoming,
+					fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, oldiAcc.Id))
 			}
 
 		// получены данные от WS сервера
@@ -303,33 +329,57 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg DataMsg
 					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
 						var localAtc, remoteAtc string
+						var channelType string
 						for _, val := range cc.channelSetts.ChSettings {
 							if val.Id == dataMsg.ChannelID {
 								localAtc = val.LocalATC
 								remoteAtc = val.RemoteATC
+								channelType = val.DataType
 								break
 							}
 						}
 
-						var aodbDataMsg fdps.FdpsAodbPackage
-						aodbDataMsg.MsgHeader = fdps.FdpsDataText
-						aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
-						aodbDataMsg.LocalAtc = localAtc
-						aodbDataMsg.RemoteAtc = remoteAtc
-						aodbDataMsg.Text = dataMsg.Text
+						if channelType == fdps.AODBProvider {
+							var aodbDataMsg fdps.FdpsAodbPackage
+							aodbDataMsg.MsgHeader = fdps.FdpsDataText
+							aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
+							aodbDataMsg.LocalAtc = localAtc
+							aodbDataMsg.RemoteAtc = remoteAtc
+							aodbDataMsg.Text = dataMsg.Text
 
-						cc.aodbIdent++
-						if cc.aodbIdent > 100000 {
-							cc.aodbIdent = 1
-						}
+							cc.aodbIdent++
+							if cc.aodbIdent > 100000 {
+								cc.aodbIdent = 1
+							}
 
-						if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-							cc.OutAodbPacketChan <- dataToSend
+							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
+								cc.OutAodbPacketChan <- dataToSend
 
-							chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
-								fmtp.Operational.ToString(), common.DirectionIncoming,
-								fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-									fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+								chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+									fmtp.Operational.ToString(), common.DirectionIncoming,
+									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+										fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+							}
+						} else if channelType == fdps.OLDIProvider {
+							var oldiDataMsg fdps.FdpsOldiPackage
+							oldiDataMsg.Id = cc.aodbIdent
+							oldiDataMsg.LocalAtc = localAtc
+							oldiDataMsg.RemoteAtc = remoteAtc
+							oldiDataMsg.Text = dataMsg.Text
+
+							cc.oldiIdent++
+							if cc.oldiIdent > 1000 {
+								cc.oldiIdent = 1
+							}
+
+							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
+								cc.OutOldiPacketChan <- dataToSend
+
+								chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+									fmtp.Operational.ToString(), common.DirectionIncoming,
+									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+										fdps.FdpsOldiService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+							}
 						}
 					}
 				}
@@ -382,14 +432,12 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 	}
 	accMsg := fdps.FdpsAodbAcknowledge{FdpsHeader: fdps.FdpsHeader{MsgHeader: fdps.FdpsAcknowledge}, Ident: pkg.Ident}
 	if channelID != -1 {
-		//if sock, ok := cc.wsClients[channelID]; ok {
-		// 	if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
-		if _, ok := cc.wsClients[channelID]; ok {
-			if _, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+		if sock, ok := cc.wsClients[channelID]; ok {
+			if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
 				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
 			} else {
 				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					//cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
+					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
 					accMsg.State = fdps.FdpsAckOkText
 				} else {
 					accMsg.State = fdps.FdpsAckFailedText
@@ -408,6 +456,39 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 	} else {
 		cc.OutAodbPacketChan <- dataToSend
 	}
+
+	chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
+		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
+}
+
+// ProcessOldiPacket обработка пакета OLDI
+func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
+	var channelID int = -1
+
+	for _, val := range cc.channelSetts.ChSettings {
+
+		if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+			channelID = val.Id
+			break
+		}
+	}
+	accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
+	if channelID != -1 {
+		//if sock, ok := cc.wsClients[channelID]; ok {
+		// 	if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+		if _, ok := cc.wsClients[channelID]; ok {
+			if _, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
+			} else {
+				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
+					//cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
+				}
+			}
+		}
+	}
+
+	// отправка подтверждения
+	cc.OutOldiPacketChan <- accMsg.ToString()
 
 	chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
 		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))

@@ -214,8 +214,8 @@ func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
 	if cc.withDocker {
 
 		// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
-		if stopErr := utils.StopAndRmContainers(ChannelImageName); stopErr != nil {
-			logger.PrintfErr("Ошибка остановки и удаления docker контейнеров приложения 'FMTP канал'. Ошибка: %s.", stopErr.Error())
+		if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
+			logger.PrintfErr("Ошибка остановки docker контейнеров приложения 'FMTP канал'. Ошибка: %s.", stopErr.Error())
 		}
 
 		if len(ChiefCfg.DockerRegistry) > 0 {
