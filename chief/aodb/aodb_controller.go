@@ -109,8 +109,8 @@ func (c *Controller) Work() {
 		case connState := <-c.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: %s.", c.wsServerSetts.Port, utils.ParkingClientsPath)
-				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(c.wsServerSetts.Port)+" Path: "+utils.StatisticsClientsPath, logger.StateOkColor)
+				logger.PrintfInfo("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: %s.", c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath)
+				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(c.wsServerSetts.Port)+" Path: "+utils.FmtpAodbWsUrlPath, logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
 			}

@@ -31,27 +31,10 @@ func InitSaveConfigHandler(handleURL string, title string) {
 
 func saveConfigHandler(w http.ResponseWriter, r *http.Request) {
 
-	// dbPort, _ := strconv.Atoi(r.FormValue("DbPort"))
+	srv.configPage.UrlConfig.SettingsURLStr = r.FormValue("SettingsURLStr")
+	srv.configPage.UrlConfig.HeartbeatURLStr = r.FormValue("HeartbeatURLStr")
 
-	// srv.configPage.Setts.DbSetts.Hostname = r.FormValue("DbHostname")
-	// srv.configPage.Setts.DbSetts.Port = dbPort
-	// srv.configPage.Setts.DbSetts.ServiceName = r.FormValue("DbServiceName")
-	// srv.configPage.Setts.DbSetts.UserName = r.FormValue("DbUser")
-	// srv.configPage.Setts.DbSetts.Password = r.FormValue("DbPassword")
-
-	// wsPort, _ := strconv.Atoi(r.FormValue("WsPort"))
-	// srv.configPage.Setts.WsSetts.Port = wsPort
-
-	// srv.configPage.Setts.FirCode = r.FormValue("FirCode")
-
-	// r.ParseForm()
-	// if len(r.Form["NeedUpdateANI"]) == 1 {
-	// 	srv.configPage.Setts.NeedUpdateANI = r.Form["NeedUpdateANI"][0] == "check"
-	// }
-
-	// fmt.Println("NeedUpdateANI", srv.configPage.Setts.NeedUpdateANI)
-
-	// SettsChan <- srv.configPage.Setts
+	UrlConfigChan <- srv.configPage.UrlConfig
 
 	http.Redirect(w, r, "/"+utils.FmtpChiefWebLogPath, http.StatusFound)
 }

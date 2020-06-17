@@ -9,3 +9,5 @@ chief/config/logger_settings.json
 chief/__debug_bin
 /chief/runningChannels
 /chief/versions
+/channel/*.exe
+/chief/*.exe

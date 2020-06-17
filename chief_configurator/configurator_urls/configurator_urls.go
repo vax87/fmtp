@@ -1,4 +1,4 @@
-package chief_configurator
+package configurator_urls
 
 import (
 	"net/url"

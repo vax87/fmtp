@@ -410,7 +410,7 @@ func (cc *ChiefChannelServer) Work() {
 		case connState := <-cc.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d Path: %s.", cc.channelSetts.ChPort, utils.ParkingClientsPath)
+				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d Path: %s.", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
 				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(cc.channelSetts.ChPort)+" Path: "+utils.FmtpChannelWsUrlPath, logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)

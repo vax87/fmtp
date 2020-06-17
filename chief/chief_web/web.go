@@ -2,6 +2,7 @@ package chief_web
 
 import (
 	"context"
+	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/utils"
 	"fmt"
 	"log"
@@ -19,7 +20,7 @@ type httpServer struct {
 
 var srv httpServer
 
-//var SettsChan = make(chan settings.Settings, 1)
+var UrlConfigChan = make(chan configurator_urls.ConfiguratorUrls, 1)
 
 func Start(done chan struct{}) {
 	wsc.load()
@@ -69,6 +70,6 @@ func (s *httpServer) stop() {
 	}
 }
 
-// func SetSetts(setts settings.Settings) {
-// 	srv.configPage.Setts = setts
-// }
+func SetUrlConfig(urlConfig configurator_urls.ConfiguratorUrls) {
+	srv.configPage.UrlConfig = urlConfig
+}

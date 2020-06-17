@@ -12,7 +12,9 @@ import (
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/fmtp/logger/common"
 	"fdps/fmtp/web"
 	"fdps/utils"
@@ -28,8 +30,8 @@ var ChiefCfg chief_settings.ChiefSettings = chief_settings.ChiefSettings{CntrlID
 const ChannelImageName = "fmtp_channel"
 
 // клиент контроллера для подключения к конфигуратору
-type ChiefConfigutarorClient struct {
-	configUrls           ConfiguratorUrls
+type ChiefConfiguratorClient struct {
+	configUrls           configurator_urls.ConfiguratorUrls
 	HeartbeatChan        chan HeartbeatMsg                             // канал для приема сообщений о состоянии контроллера
 	FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
 	LoggerSettsChan      chan common.LoggerSettings                    // канал для передачи настроек логгера
@@ -45,8 +47,8 @@ type ChiefConfigutarorClient struct {
 }
 
 // NewChiefClient конструктор клиента
-func NewChiefClient(workWithDocker bool) *ChiefConfigutarorClient {
-	return &ChiefConfigutarorClient{
+func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
+	return &ChiefConfiguratorClient{
 		HeartbeatChan:          make(chan HeartbeatMsg, 10),
 		FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort),
 		LoggerSettsChan:        make(chan common.LoggerSettings),
@@ -58,7 +60,7 @@ func NewChiefClient(workWithDocker bool) *ChiefConfigutarorClient {
 }
 
 // Work рабочий цикл
-func (cc *ChiefConfigutarorClient) Work() {
+func (cc *ChiefConfiguratorClient) Work() {
 	for {
 		select {
 
@@ -114,26 +116,31 @@ func (cc *ChiefConfigutarorClient) Work() {
 		// сработал таймер считывания настроек из файла
 		case <-cc.readLocalSettingsTimer.C:
 			if fileErr := ChiefCfg.ReadFromFile(); fileErr != nil {
-				logger.PrintfErr("Ошибка чтения настроек контроллера з файла. Ошибка: %s.", fileErr.Error())
+				logger.PrintfErr("Ошибка чтения настроек контроллера из файла. Ошибка: %s.", fileErr.Error())
 			} else {
 				logger.PrintfErr("Настройки контроллера считаны из файла.")
 				// отправляем настройки
 				go cc.sendSettings()
 			}
+
+		// получены настроки URL из web
+		case cc.configUrls = <-chief_web.UrlConfigChan:
+			cc.configUrls.SaveToFile()
 		}
 	}
 }
 
 // Start запуск взаимодействия с конфигуратором
-func (cc *ChiefConfigutarorClient) Start() {
+func (cc *ChiefConfiguratorClient) Start() {
 	cc.configUrls.ReadFromFile()
+	chief_web.SetUrlConfig(cc.configUrls)
 
 	cc.initBeforeGetSettings()
 	cc.postSettingsRequest()
 }
 
 // отправка запроса настроек конфигуратору
-func (cc *ChiefConfigutarorClient) postSettingsRequest() {
+func (cc *ChiefConfiguratorClient) postSettingsRequest() {
 
 	postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
 	if postErr != nil {
@@ -148,7 +155,7 @@ func (cc *ChiefConfigutarorClient) postSettingsRequest() {
 }
 
 // отправка POST сообщения конфигуратору и возврат ответа
-func (cc *ChiefConfigutarorClient) postToConfigurator(url string, msg interface{}) error {
+func (cc *ChiefConfiguratorClient) postToConfigurator(url string, msg interface{}) error {
 	jsonValue, _ := json.Marshal(msg)
 	resp, postErr := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
 	if postErr == nil {
@@ -185,7 +192,7 @@ func (cc *ChiefConfigutarorClient) postToConfigurator(url string, msg interface{
 }
 
 // инициализация после получений настроек
-func (cc *ChiefConfigutarorClient) initBeforeGetSettings() {
+func (cc *ChiefConfiguratorClient) initBeforeGetSettings() {
 	logger.SetDebugParam(dbgChannelVersions, "-", logger.StateDefaultColor)
 
 	var versErr error
@@ -209,7 +216,7 @@ func (cc *ChiefConfigutarorClient) initBeforeGetSettings() {
 }
 
 // инициализация после получений настроек
-func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
+func (cc *ChiefConfiguratorClient) initAfterGetSettings() {
 
 	if cc.withDocker {
 
@@ -239,7 +246,7 @@ func (cc *ChiefConfigutarorClient) initAfterGetSettings() {
 }
 
 // отправляе настройки каналам, провайдерам, клиенту логгера
-func (cc *ChiefConfigutarorClient) sendSettings() {
+func (cc *ChiefConfiguratorClient) sendSettings() {
 	// добавляем в настройки URL
 	for ind, _ := range ChiefCfg.ChannelSetts {
 		ChiefCfg.ChannelSetts[ind].URLAddress = ChiefCfg.IPAddr

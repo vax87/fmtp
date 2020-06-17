@@ -157,7 +157,7 @@ func main() {
 	chief_web.Start(done)
 
 	// клиент для связи с конфигуратором
-	var chiefConfClient *chief_configurator.ChiefConfigutarorClient
+	var chiefConfClient *chief_configurator.ChiefConfiguratorClient
 
 	// сервер WS для подключения AODB провайдеров
 	var aodbCntrl = aodb.NewController(done)

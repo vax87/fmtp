@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"sync"
 
+	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/utils/logger"
 )
 
@@ -12,7 +13,7 @@ type ConfigPage struct {
 	editTempl *template.Template
 	Title     string
 
-	//Setts settings.Settings
+	UrlConfig configurator_urls.ConfiguratorUrls
 }
 
 func (cp *ConfigPage) initialize(title string) {
@@ -37,60 +38,15 @@ var ConfigTemplate = `
 	<tr>
 		<td colspan="2">Настройки подключения к БД</td>
 	</tr>
-	{{with .Setts}}
-		{{with .DbSetts}}
+	{{with .UrlConfig}}
 		<tr>
-			<td align="left">Хост:</td>
-			<td><input name="DbHostname" type="text" size="40" value={{printf "%s" .Hostname}}></td>
+			<td align="left">URL для запроса настроек:</td>
+			<td><input name="SettingsURLStr" type="text" size="100" value={{printf "%s" .SettingsURLStr}}></td>
 		</tr>
 		<tr>
-			<td align="left">Порт:</td>
-			<td><input name="DbPort" type="number" min="1024" max="65535" size="40" value={{printf "%d" .Port}}></td>
-		</tr>
-		<tr>
-			<td align="left">Имя сервиса:</td>
-			<td><input name="DbServiceName" type="text" size="40" value={{printf "%s" .ServiceName}}></td>
-		</tr>
-		<tr>
-			<td align="left">Пользователь:</td>
-			<td><input name="DbUser" type="text" size="40" value={{printf "%s" .UserName}}></td>
-		</tr>
-		<tr>
-			<td align="left">Пароль:</td>
-			<td><input name="DbPassword" type="text" size="40" value={{printf "%s" .Password}}></td>
-		</tr>
-		{{end}}
-	<tr>
-		<td colspan="2"></td>
-	</tr>
-	<tr>
-		<td colspan="2"></td>
-	</tr>
-	<tr>
-		<td align="left">ICAO код FIR:</td>
-		<td><input name="FirCode" type="text" size="40" value={{printf "%s" .FirCode}}></td>
-	</tr>
-	<tr>
-		<td>
-		<input type="checkbox" name="NeedUpdateANI" value="check" />Обновить АНИ<Br>
-		</td>
-	</tr>
-	<tr>
-		<td colspan="2"></td>
-	</tr>
-	<tr>
-		<td colspan="2"></td>
-	</tr>
-		{{with .WsSetts}}
-		<tr>
-			<td colspan="2">Настройки подключения клиентов</td>
-		</tr>
-		
-		<tr>
-			<td align="left">Порт:</td>
-			<td><input name="WsPort" type="number" min="1024" max="65535" size="40" value={{printf "%d" .Port}}></td>
-		</tr>
-		{{end}}	
+			<td align="left">URL для отправки состояния:</td>
+			<td><input name="HeartbeatURLStr" type="text" size="100" value={{printf "%s" .HeartbeatURLStr}}></td>			
+		</tr>		
 	{{end}}	
 	<tr> 
     	<td colspan="2"><input type="submit" value="Применить"></td>
