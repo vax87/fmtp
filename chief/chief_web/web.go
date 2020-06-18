@@ -1,7 +1,8 @@
 package chief_web
 
 import (
-	"context"
+	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/utils"
 	"fmt"
@@ -16,12 +17,15 @@ type httpServer struct {
 	done        chan struct{}
 	reqCount    uint32
 	configPage  *ConfigPage
+	chiefPage   *ChiefPage
 }
 
 var srv httpServer
 
+// UrlConfigChan канал для отправки настроек подключения к конфигуратору
 var UrlConfigChan = make(chan configurator_urls.ConfiguratorUrls, 1)
 
+// Start -
 func Start(done chan struct{}) {
 	wsc.load()
 
@@ -31,13 +35,16 @@ func Start(done chan struct{}) {
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,
 		},
-		//shutdownReq: sdc,
 		done:       done,
 		configPage: new(ConfigPage),
+		chiefPage:  new(ChiefPage),
 	}
 	srv.configPage.initialize("FDPS-FMTP-CHIEF-CONFIG")
+	srv.chiefPage.initialize("FDPS-FMTP-CHIEF")
+	InitChiefChannelsHandler(utils.FmtpChiefWebPath, "CHIEF")
+	utils.AppendHandler(ChiefHdl)
 
-	InitEditConfigHandler(utils.ParkingWebConfigPath, "EDIT CONFIG")
+	InitEditConfigHandler(utils.FmtpChiefWebConfigPath, "EDIT CONFIG")
 	utils.AppendHandler(EditConfHandler)
 	InitSaveConfigHandler("saveConfig", "SAVE PARKING")
 	utils.AppendHandler(SaveConfHandler)
@@ -56,20 +63,22 @@ func Start(done chan struct{}) {
 	}()
 }
 
-func (s *httpServer) stop() {
-	log.Printf("stoping http server ...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-	defer cancel()
-
-	err := s.Shutdown(ctx)
-
-	if err != nil {
-		log.Printf("shutdown http server error: %v", err)
-	}
-}
-
+// SetUrlConfig - задать параметры подключения к конфигуратору
 func SetUrlConfig(urlConfig configurator_urls.ConfiguratorUrls) {
 	srv.configPage.UrlConfig = urlConfig
+}
+
+// SetChannelStates - задать состояния FMTP каналов
+func SetChannelStates(states []channel_state.ChannelState) {
+	srv.chiefPage.ChannelStates = states
+}
+
+// SetOldiProviderStates - задать состояния провайдеров OLDI
+func SetOldiProviderStates(states []fdps.ProviderState) {
+	srv.chiefPage.OldiProviderStates = states
+}
+
+// SetAodbProviderStates - задать состояния провайдеров AODB
+func SetAodbProviderStates(states []fdps.ProviderState) {
+	srv.chiefPage.AodbProviderStates = states
 }

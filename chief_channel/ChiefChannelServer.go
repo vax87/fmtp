@@ -188,6 +188,8 @@ func (cc *ChiefChannelServer) Work() {
 			cc.channelSetts.ChSettings = append([]channel_settings.ChannelSettings(nil), newSetts.ChSettings...)
 			cc.channelSetts.ChPort = newSetts.ChPort
 
+			var chStateSlice []channel_state.ChannelState
+
 			for _, val := range cc.channelSetts.ChSettings {
 				var chWork string
 				if val.IsWorking {
@@ -195,16 +197,23 @@ func (cc *ChiefChannelServer) Work() {
 				} else {
 					chWork = channel_state.ChannelStateStopped
 				}
-				cc.chStates[val.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
+
+				curChannelState := channel_state.ChannelState{
 					ChannelID:   val.Id,
 					LocalName:   val.LocalATC,
 					RemoteName:  val.RemoteATC,
 					DaemonState: chWork,
 					FmtpState:   "disabled",
 					ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
-				},
+				}
+				cc.chStates[val.Id] = сhannelStateTime{ChannelState: curChannelState,
 					Time: time.Now()}
+
+				chStateSlice = append(chStateSlice, curChannelState)
 			}
+
+			// отправляем heartbeat контроллеру
+			cc.ChannelStates <- chStateSlice
 
 			// останавливаем каналы FMTP
 			if len(needToStopIds) > 0 {
@@ -304,7 +313,7 @@ func (cc *ChiefChannelServer) Work() {
 						}
 					}
 
-				case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
+				case ChannelHeartbeatHeader:
 					var curHbtMsg ChannelHeartbeatMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
 						cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
@@ -320,7 +329,6 @@ func (cc *ChiefChannelServer) Work() {
 				case ChannelLogHeader:
 					var curLogMsg ChannelLogMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
-						//cc.LogChan <- curLogMsg.LogMessage
 						chief_logger.ChiefLog.FmtpLogChan <- curLogMsg.LogMessage
 					}
 
@@ -410,8 +418,8 @@ func (cc *ChiefChannelServer) Work() {
 		case connState := <-cc.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d Path: %s.", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
-				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(cc.channelSetts.ChPort)+" Path: "+utils.FmtpChannelWsUrlPath, logger.StateOkColor)
+				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d. Path: \"%s\".", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
+				logger.SetDebugParam(srvStateKey, fmt.Sprintf("%s Порт: %d. Path: \"%s\"", srvStateOkValue, cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath), logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
 			}

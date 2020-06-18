@@ -12,5 +12,7 @@ type ProviderState struct {
 	ProviderIPs          []string `json:"ProviderIPs"`   // список сетевых адресов провайдеров
 	ProviderState        string   "ProviderState"        // состояние провайдера
 	ProviderErrorMessage string   "ProviderErrorMessage" // текст ошибки
+	ClientAddresses      string   `json:"-"`             // адреса подключенных клиентов
 	ProviderURL          string   `json:"-"`             // URL web странички провайдера
+	StateColor           string   `json:"-"`
 }

@@ -4,7 +4,6 @@ import (
 	"log"
 	"sort"
 
-	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/aodb"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
@@ -73,39 +72,6 @@ func initDockerInfo() bool {
 		log_web.SetDockerVersion(dockerVersion)
 	}
 	return true
-}
-
-// отправка состояния каналов web страничке
-func sendChannelStatesToWeb(states []channel_state.ChannelState) {
-	var chWebStates []web.ChannelStateWeb
-	for _, nn := range states {
-		var curColor string
-
-		switch nn.DaemonState {
-		case channel_state.ChannelStateStopped:
-			curColor = web.StopColor
-		case channel_state.ChannelStateError:
-			curColor = web.ErrorColor
-		case channel_state.ChannelStateOk:
-			curColor = web.OkColor
-		default:
-			curColor = web.DefaultColor
-		}
-
-		chWebStates = append(chWebStates, web.ChannelStateWeb{
-			ChannelID:   nn.ChannelID,
-			ChannelURL:  nn.ChannelURL,
-			LocalName:   nn.LocalName,
-			RemoteName:  nn.RemoteName,
-			DaemonState: nn.DaemonState,
-			FmtpState:   nn.FmtpState,
-			StateColor:  curColor,
-		})
-	}
-	sort.Slice(chWebStates, func(i, j int) bool {
-		return chWebStates[i].ChannelID < chWebStates[j].ChannelID
-	})
-	//web.SetChannelStates(chWebStates)
 }
 
 // отправка состояния провайдеров web страничке
@@ -221,6 +187,7 @@ func main() {
 		// состояние провайдера AODB
 		case curAodbState := <-aodbCntrl.ProviderStatesChan:
 			heartbeat.SetAodbProviderState(curAodbState)
+			chief_web.SetAodbProviderStates(curAodbState)
 
 		// получены данные от провайдера OLDI
 		case oldiData := <-oldiCntrl.FromOldiDataChan:
@@ -233,6 +200,7 @@ func main() {
 		// состояние провайдера OLDI
 		case curOldiState := <-oldiCntrl.ProviderStatesChan:
 			heartbeat.SetOldiProviderState(curOldiState)
+			chief_web.SetOldiProviderStates(curOldiState)
 
 		// сообщение о состоянии контроллера
 		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
@@ -241,6 +209,7 @@ func main() {
 		// получено состояние каналов
 		case curChannelStates := <-channelCntrl.ChannelStates:
 			heartbeat.SetChannelsState(curChannelStates)
+			chief_web.SetChannelStates(curChannelStates)
 		}
 	}
 }

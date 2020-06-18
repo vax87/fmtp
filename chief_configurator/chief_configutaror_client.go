@@ -3,6 +3,7 @@ package chief_configurator
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -43,7 +44,9 @@ type ChiefConfiguratorClient struct {
 
 	withDocker bool
 
-	channelVersions []string // список версий приложений/docker бразов FMTP канала
+	channelVersions  []string // список версий приложений/docker бразов FMTP канала
+	lastSettsPostErr error    // последняя ошибка при запросе настроек
+	lastHbtPostErr   error    // последняя ошибка при отправке состояния
 }
 
 // NewChiefClient конструктор клиента
@@ -56,6 +59,8 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 		postResultChan:         make(chan json.RawMessage, 10),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
+		lastSettsPostErr:       errors.New(""),
+		lastHbtPostErr:         errors.New(""),
 	}
 }
 
@@ -111,7 +116,14 @@ func (cc *ChiefConfiguratorClient) Work() {
 
 		// получено собщение о состоянии контроллера
 		case hbMgs := <-cc.HeartbeatChan:
-			go cc.postToConfigurator(cc.configUrls.HeartbeatURLStr, hbMgs)
+			if hbtPostErr := cc.postToConfigurator(cc.configUrls.HeartbeatURLStr, hbMgs); hbtPostErr != nil {
+				if cc.lastHbtPostErr.Error() == "" {
+					cc.lastHbtPostErr = hbtPostErr
+					logger.PrintfErr("%v", hbtPostErr)
+				}
+			} else {
+				cc.lastHbtPostErr = errors.New("")
+			}
 
 		// сработал таймер считывания настроек из файла
 		case <-cc.readLocalSettingsTimer.C:
@@ -142,15 +154,20 @@ func (cc *ChiefConfiguratorClient) Start() {
 // отправка запроса настроек конфигуратору
 func (cc *ChiefConfiguratorClient) postSettingsRequest() {
 
-	postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
-	if postErr != nil {
-		logger.PrintfErr("Ошибка запроса настроек у конфигуратора. Ошибка: %s", postErr.Error())
+	if postErr := cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions)); postErr != nil {
+
+		if cc.lastSettsPostErr.Error() != postErr.Error() {
+			cc.lastSettsPostErr = postErr
+			logger.PrintfErr("%v", postErr)
+		}
 
 		// если настройки не инициализированы, снова их запрашиваем
 		// при считывании из файла настроки не инициализируются (только при получении от конфигуратора)
 		if !ChiefCfg.IsInitialised {
 			time.AfterFunc(5*time.Second, func() { cc.postSettingsRequest() })
 		}
+	} else {
+		cc.lastSettsPostErr = errors.New("")
 	}
 }
 

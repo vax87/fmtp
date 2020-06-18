@@ -13,4 +13,5 @@ type ChannelState struct {
 	DaemonState string `json:"DaemonState"` // состояние канала *Не переменовывать в ChannelState
 	FmtpState   string `json:"FmtpState"`   // FMTP состояние канала
 	ChannelURL  string `json:"ChannelURL"`  // URL web странички канала
+	StateColor  string `json:"-"`
 }

@@ -2,7 +2,6 @@ package aodb
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"fdps/fmtp/chief/fdps"
@@ -73,8 +72,10 @@ func (c *Controller) Work() {
 				}
 			}
 
-			c.wsServer.SettingsChan <- web_sock.WebSockServerSettings{
+			c.wsServerSetts = web_sock.WebSockServerSettings{
 				Port: localPort, PermitClientIps: permitIPs}
+
+			c.wsServer.SettingsChan <- c.wsServerSetts
 
 		// получен новый пакет для отправки провайдеру
 		case incomeData := <-c.ToAODBDataChan:
@@ -109,8 +110,8 @@ func (c *Controller) Work() {
 		case connState := <-c.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: %s.", c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath)
-				logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(c.wsServerSetts.Port)+" Path: "+utils.FmtpAodbWsUrlPath, logger.StateOkColor)
+				logger.PrintfInfo("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: \"%s\".", c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath)
+				logger.SetDebugParam(srvStateKey, fmt.Sprintf("%s Порт: %d. Path: \"%s\"", srvStateOkValue, c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath), logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
 			}
