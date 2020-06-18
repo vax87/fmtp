@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_logger"
 	"fdps/fmtp/logger/common"
@@ -28,9 +29,8 @@ const (
 )
 
 type oldiClnt struct {
-	cancelWorkChan chan struct{} // канал для сигнала прекращения отправки
-	//cancelReceiveChan chan struct{} // канал для сигнала прекращениячтения данных
-	toSendDataChan chan []byte // канал для отправки данных
+	cancelWorkChan chan struct{} // канал для сигнала прекращения отправки/приема данных
+	toSendDataChan chan []byte   // канал для отправки данных
 }
 
 // OldiController контроллер для работы с провайдером OLDI
@@ -51,6 +51,8 @@ type OldiController struct {
 	tcpLocalPort    int
 
 	closeTcpListenerFunc func()
+
+	providerEncoding string
 }
 
 // NewOldiController конструктор
@@ -91,7 +93,6 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 				} else {
 					c.providerClients[curConn] = oldiClnt{
 						cancelWorkChan: make(chan struct{}),
-						//cancelReceiveChan: make(chan struct{}),
 						toSendDataChan: make(chan []byte, 1024),
 					}
 
@@ -121,10 +122,10 @@ func (c *OldiController) stopServer() {
 
 func (c *OldiController) closeClient(conn net.Conn) {
 	if val, ok := c.providerClients[conn]; ok == true {
-		// останавливаем передачу / прием
+
 		conn.SetDeadline(time.Now().Add(time.Second))
+		// останавливаем передачу / прием
 		utils.ChanSafeClose(val.cancelWorkChan)
-		//utils.ChanSafeClose(val.cancelReceiveChan)
 		logger.PrintfErr("Отключен клиент OLDI провайдера. Адрес: %s", conn.RemoteAddr().String())
 		delete(c.providerClients, conn)
 	}
@@ -136,21 +137,23 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 		select {
 		// отмена приема данных
 		case <-clnt.cancelWorkChan:
-			logger.PrintfDebug("Close receive/ Addr: %s", clntConn.RemoteAddr().String())
 			return
 		// прием данных
 		default:
 			buffer := make([]byte, 8192)
 			if readBytes, err := clntConn.Read(buffer); err != nil {
-				//if err != io.EOF {
 				chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
-				logger.PrintfErr("receive error : %v", err.Error())
-				//}
+
 				c.closeClient(clntConn)
 			} else {
 				logger.PrintfDebug("Приняты данные от OLDI провайдера: %v", string(buffer[:readBytes]))
-				c.FromOldiDataChan <- buffer[:readBytes]
+
+				if c.providerEncoding == channel_settings.Encode1251 {
+					c.FromOldiDataChan <- utils.Win1251toUtf8(buffer[:readBytes])
+				} else {
+					c.FromOldiDataChan <- buffer[:readBytes]
+				}
 			}
 		}
 	}
@@ -162,12 +165,16 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 		select {
 		// отмена отправки данных
 		case <-clnt.cancelWorkChan:
-			logger.PrintfDebug("Close send/ Addr: %s", clntConn.RemoteAddr().String())
 			return
 
 		// получены данные для отправки
 		case curData := <-clnt.toSendDataChan:
-			if _, err := clntConn.Write(curData); err != nil {
+			var dataToSend []byte
+			if c.providerEncoding == channel_settings.Encode1251 {
+				dataToSend = utils.Utf8toWin1251(curData)
+			}
+
+			if _, err := clntConn.Write(dataToSend); err != nil {
 				chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
 				c.closeClient(clntConn)
@@ -194,6 +201,7 @@ func (c *OldiController) Work() {
 				for _, ipVal := range val.IPAddresses {
 					permitIPs = append(permitIPs, ipVal)
 				}
+				c.providerEncoding = val.ProviderEncoding
 			}
 
 			if c.tcpLocalPort != localPort {

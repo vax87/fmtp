@@ -8,11 +8,11 @@ import (
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/channel/encode"
 	"fdps/fmtp/channel/tcp_transport"
 	"fdps/fmtp/fmtp"
 	"fdps/fmtp/logger/common"
 	"fdps/fmtp/web"
+	"fdps/utils"
 )
 
 // контроллер переходов в FMTP состояния
@@ -253,7 +253,7 @@ func (fsc *StateController) sendPacket(messageToSend fmtp.FmtpMessage, fmtpEvent
 	utfTextToLog := messageToSend.Text
 
 	if fsc.curSet.DataEncoding == channel_settings.Encode1251 {
-		messageToSend.Text = encode.Utf8toWin1251(messageToSend.Text)
+		messageToSend.Text = string(utils.Utf8toWin1251([]byte(messageToSend.Text)))
 	}
 
 	fsc.tcpTransport.SendChan() <- tcp_transport.DataAndEvent{DataToSend: fmtp.MakeFmtpPacket(messageToSend), EventAfterSend: fmtpEvent}
@@ -268,7 +268,7 @@ func (fsc *StateController) processEventMessage(curEvent fmtp.FmtpEvent, fmtpMsg
 	if (logSeverity == common.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != common.SeverityDebug {
 
 		if fsc.curSet.DataEncoding == channel_settings.Encode1251 && curEvent == fmtp.RData {
-			fmtpMsg.Text = encode.Win1251toUtf8(fmtpMsg.Text)
+			fmtpMsg.Text = string(utils.Win1251toUtf8([]byte(fmtpMsg.Text)))
 		}
 
 		fsc.LogMessageChan <- common.LogChannelSTDT(logSeverity, fmtpMsg.Type.ToString(), common.DirectionIncoming,
@@ -280,7 +280,7 @@ func (fsc *StateController) processEventMessage(curEvent fmtp.FmtpEvent, fmtpMsg
 
 func (fsc *StateController) processDataMessage(fmtpMsg fmtp.FmtpMessage) {
 	if fsc.curSet.DataEncoding == channel_settings.Encode1251 {
-		fmtpMsg.Text = encode.Win1251toUtf8(fmtpMsg.Text)
+		fmtpMsg.Text = string(utils.Win1251toUtf8([]byte(fmtpMsg.Text)))
 	}
 
 	fsc.LogMessageChan <- common.LogChannelSTDT(common.SeverityInfo, fmtpMsg.Type.ToString(), common.DirectionIncoming,

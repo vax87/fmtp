@@ -17,7 +17,6 @@ import (
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/fmtp/logger/common"
-	"fdps/fmtp/web"
 	"fdps/utils"
 	"fdps/utils/logger"
 )
@@ -93,6 +92,13 @@ func (cc *ChiefConfiguratorClient) Work() {
 						ChiefCfg.SaveToFile()
 
 						cc.initAfterGetSettings()
+
+						// выставляем кодировку сообщений для OLDI провайдеров
+						for idx, val := range ChiefCfg.ProvidersSetts {
+							if val.DataType == fdps.OLDIProvider {
+								ChiefCfg.ProvidersSetts[idx].ProviderEncoding = ChiefCfg.OldiProviderEncoding
+							}
+						}
 
 						// отправляем настройки
 						go cc.sendSettings()
@@ -180,31 +186,25 @@ func (cc *ChiefConfiguratorClient) postToConfigurator(url string, msg interface{
 		if strings.Contains(resp.Status, "200") {
 			if body, readErr := ioutil.ReadAll(resp.Body); readErr == nil {
 				if bytes.Contains(body, []byte("error")) { //пишем в логи только ошибки
-					web.SetConfigConn(false)
 					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))
 				}
 				if ind := strings.Index(string(body), "{"); ind >= 0 {
 					cc.postResultChan <- body[ind:]
 				} else {
-					web.SetConfigConn(false)
 					return fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))
 				}
 			} else {
-				web.SetConfigConn(false)
 				return fmt.Errorf("Ошибка чтения ответа http запроса. Тело пакета: %s. Ошибка: %s", string(body), readErr.Error())
 			}
 		} else {
-			web.SetConfigConn(false)
 			return fmt.Errorf("HTPP запрос выполнен с ошибкой. Запрос: %s. URL: %s. Статус ответа: %s",
 				jsonValue, url, resp.Status)
 		}
 	} else {
-		web.SetConfigConn(false)
 		return fmt.Errorf("Ошибка выполнения HTPP запроса. Запрос: %s. URL: %s. Ошибка: %s",
 			jsonValue, url, postErr.Error())
 	}
 
-	web.SetConfigConn(true)
 	return nil
 }
 
