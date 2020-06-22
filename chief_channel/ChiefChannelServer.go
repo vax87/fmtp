@@ -95,6 +95,7 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 		wsClients:            make(map[int]*websocket.Conn),
 		chStates:             make(map[int]сhannelStateTime),
 		aodbIdent:            1,
+		oldiIdent:            1,
 		withDocker:           workWithDocker,
 	}
 }
@@ -284,7 +285,7 @@ func (cc *ChiefChannelServer) Work() {
 
 				chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
 					fmtp.Operational.ToString(), common.DirectionIncoming,
-					fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, oldiAcc.Id))
+					fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
 			}
 
 		// получены данные от WS сервера
@@ -370,7 +371,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 						} else if channelType == fdps.OLDIProvider {
 							var oldiDataMsg fdps.FdpsOldiPackage
-							oldiDataMsg.Id = cc.aodbIdent
+							oldiDataMsg.Id = cc.oldiIdent
 							oldiDataMsg.LocalAtc = localAtc
 							oldiDataMsg.RemoteAtc = remoteAtc
 							oldiDataMsg.Text = dataMsg.Text
@@ -482,14 +483,12 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 	}
 	accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
 	if channelID != -1 {
-		//if sock, ok := cc.wsClients[channelID]; ok {
-		// 	if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
-		if _, ok := cc.wsClients[channelID]; ok {
-			if _, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+		if sock, ok := cc.wsClients[channelID]; ok {
+			if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
 				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
 			} else {
 				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					//cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
+					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
 				}
 			}
 		}
