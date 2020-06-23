@@ -5,9 +5,7 @@ import (
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/logger/common"
-	"fdps/fmtp/web"
 	"fdps/utils"
-	"fmt"
 )
 
 // от конфигуратора могут быть получены сообщения:
@@ -44,7 +42,6 @@ type SettingsRequestMsg struct {
 // CreateSettingsRequestMsg формирование запроса настроек
 func CreateSettingsRequestMsg(versions []string) SettingsRequestMsg {
 	curIPAddresses := utils.GetLocalIpv4List()
-	web.SetIPAddresses(fmt.Sprintf("%v", curIPAddresses))
 	return SettingsRequestMsg{MessageHeader: MessageHeader{Header: RequestSettingsHeader},
 		Versions: versions, IPAddresses: curIPAddresses}
 }
