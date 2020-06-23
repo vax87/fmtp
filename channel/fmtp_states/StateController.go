@@ -100,14 +100,10 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 
 		// полученные по TCP данные
 		case receivedData := <-fsc.tcpTransport.ReceivedChan():
-			//fmt.Println("Buffer size: ", fsc.receivedBuffer.Len(), " cap: ", fsc.receivedBuffer.Cap())
 			if _, err := fsc.receivedBuffer.Write(receivedData); err == nil {
-				//fmt.Println("Buffer size after write: ", fsc.receivedBuffer.Len(), " cap: ", fsc.receivedBuffer.Cap())
-
 				for {
 					headerBytes := make([]byte, fmtp.FmtpHeaderLen)
 					if _, err := fsc.receivedBuffer.Read(headerBytes); err == nil {
-						//fmt.Println("Buffer size after read: ", fsc.receivedBuffer.Len(), " cap: ", fsc.receivedBuffer.Cap())
 						curHeader := fmtp.ParceFmtpPacketHeader(headerBytes)
 						if curHeader.IsValid {
 							// читаем тело сообщения
@@ -117,17 +113,14 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 
 							} else {
 								if err != io.EOF {
-									//fmt.Println("read from buffer error ", err.Error())
 									fsc.LogMessageChan <- common.LogChannelST(common.SeverityError,
 										fmt.Sprintf("Ошибка чтения из буфера полученных данных данных. Ошибка: <%s>", err.Error()))
 								}
 								break
 							}
-							fsc.processFmtpMessage(fmtp.FmtpMessage{Type: curHeader.PkgType, Text: string(bodyBytes)})
 						}
 					} else {
 						if err != io.EOF {
-							//fmt.Println("read from buffer error ", err.Error())
 							fsc.LogMessageChan <- common.LogChannelST(common.SeverityError,
 								fmt.Sprintf("Ошибка чтения из буфера полученных данных данных. Ошибка: <%s>", err.Error()))
 						}
@@ -194,7 +187,6 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 			if string(fmtpMsg.Text) == string(fsc.remoteIdentificationMsg.Text) {
 
 				fsc.processEventMessage(fmtp.RIdValid, fmtpMsg, common.SeverityInfo)
-				//fsc.processIdentMessage()
 			} else {
 				fsc.LogMessageChan <- common.LogChannelSTDT(common.SeverityWarning, fmtpMsg.Type.ToString(), common.DirectionIncoming,
 					fmt.Sprintf("Несовпадение идентификационных сообщений. Ожидаемый идентификатор - <%s>, полученный - <%s>.",
@@ -215,16 +207,17 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 		}
 	case fmtp.Operational:
 		fsc.processEventMessage(fmtp.RData, fmtpMsg, common.SeverityDebug)
+		fsc.LogMessageChan <- common.LogChannelST(common.SeverityWarning, "in operational")
 		fsc.processDataMessage(fmtpMsg)
 
 	default:
+		fsc.LogMessageChan <- common.LogChannelST(common.SeverityWarning, "in default")
 		fsc.processDataMessage(fmtpMsg)
 	}
 }
 
 // оработать новое событие
 func (fsc *StateController) forceNewEvent(curEvent fmtp.FmtpEvent) {
-	//fmt.Println("force new event ", curEvent.ToString(), " cur state ", fsc.currentState.ToString())
 	if nextState := fsc.stateMachine.GetNextState(fsc.currentState, curEvent); nextState != fmtp.Empt {
 		if fsc.currentState != nextState {
 			fsc.LogMessageChan <- common.LogChannelST(common.SeverityInfo,
@@ -241,15 +234,10 @@ func (fsc *StateController) forceNewEvent(curEvent fmtp.FmtpEvent) {
 		if enterFunc, enterFunkOk := fsc.stateEnterFuncMap[fsc.currentState]; enterFunkOk == true {
 			enterFunc(fsc, curEvent)
 		}
-	} else {
-		//fmt.Println("CAN'T FIND NEXT STATE FOR ", fsc.currentState.ToString(), " after EVENT ", curEvent.ToString())
 	}
-
 }
 
 func (fsc *StateController) sendPacket(messageToSend fmtp.FmtpMessage, fmtpEvent fmtp.FmtpEvent, logSeverity string) {
-	//fmt.Println("	SEND ", string(messageToSend.Text), fmtpEvent.ToString(), " cur state ", fsc.currentState.ToString())
-
 	utfTextToLog := messageToSend.Text
 
 	if fsc.curSet.DataEncoding == channel_settings.Encode1251 {

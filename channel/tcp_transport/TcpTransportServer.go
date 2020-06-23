@@ -119,10 +119,11 @@ func (fts *TcpTransportServer) startServer() {
 		remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
 
 		if fts.tcpClient != nil {
-			fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
-				fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
-					"Клиент уже подключен. Адрес отклоненного клиента: <%s>", remoteAddr.IP.String()))
-			continue
+			fts.stopClient()
+			// fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
+			// 	fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
+			// 		"Клиент уже подключен. Адрес отклоненного клиента: <%s>", remoteAddr.IP.String()))
+			// continue
 		} else {
 			if fts.curSett.ClientAddr != "" && remoteAddr.IP.String() != fts.curSett.ClientAddr {
 				fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
@@ -147,6 +148,7 @@ func (fts *TcpTransportServer) startServer() {
 //
 func (fts *TcpTransportServer) stopClient() {
 	fts.Lock()
+	//utils.ChanSafeClose(fts.cancelWorkChan)
 	fts.cancelWorkChan <- struct{}{}
 
 	fts.connStateChan <- false
@@ -177,6 +179,7 @@ func (fts *TcpTransportServer) receiveLoop() {
 						fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
 				}
 				fts.errorChan <- err
+				//fts.stopClient()
 				return
 			} else {
 				fmt.Println("Read bytes", readBytes)
@@ -200,6 +203,7 @@ func (fts *TcpTransportServer) sendLoop() {
 				fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: <%s>.", err.Error()))
 				fts.errorChan <- err
+				//fts.stopClient()
 				return
 			} else if curData.EventAfterSend != fmtp.None {
 				fts.fmtpEventChan <- curData.EventAfterSend
