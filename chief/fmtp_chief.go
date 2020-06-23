@@ -80,7 +80,7 @@ func main() {
 	}
 
 	done := make(chan struct{})
-	go chief_web.Start(done)
+	chief_web.Start(done)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)

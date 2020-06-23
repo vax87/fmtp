@@ -117,9 +117,10 @@ func (cc *ChiefConfiguratorClient) Work() {
 				}
 			} else {
 				logger.PrintfErr("%v", postRes.err)
-				if ChiefCfg.IsInitialised == false {
+				ChiefCfg.IsInitialised = false
+				time.AfterFunc(time.Minute, func() {
 					go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
-				}
+				})
 			}
 
 		// получено собщение о состоянии контроллера

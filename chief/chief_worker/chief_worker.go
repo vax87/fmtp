@@ -2,6 +2,7 @@ package chief_worker
 
 import (
 	"fdps/fmtp/chief/aodb"
+	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief/heartbeat"
 	"fdps/fmtp/chief/oldi"
@@ -83,10 +84,9 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			aodbCntrl.ToAODBDataChan <- aodbData
 
 		// состояние провайдера AODB
-		case <-aodbCntrl.ProviderStatesChan:
-		//case curAodbState := <-aodbCntrl.ProviderStatesChan:
-		//heartbeat.SetAodbProviderState(curAodbState)
-		//chief_web.SetAodbProviderStates(curAodbState)
+		case curAodbState := <-aodbCntrl.ProviderStatesChan:
+			heartbeat.SetAodbProviderState(curAodbState)
+			chief_web.SetAodbProviderStates(curAodbState)
 
 		// получены данные от провайдера OLDI
 		case oldiData := <-oldiCntrl.FromOldiDataChan:
@@ -97,10 +97,9 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			oldiCntrl.ToOldiDataChan <- oldiData
 
 		// состояние провайдера OLDI
-		case <-oldiCntrl.ProviderStatesChan:
-		//case curOldiState := <-oldiCntrl.ProviderStatesChan:
-		//heartbeat.SetOldiProviderState(curOldiState)
-		//chief_web.SetOldiProviderStates(curOldiState)
+		case curOldiState := <-oldiCntrl.ProviderStatesChan:
+			heartbeat.SetOldiProviderState(curOldiState)
+			chief_web.SetOldiProviderStates(curOldiState)
 
 		// сообщение о состоянии контроллера
 		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
@@ -109,7 +108,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		// получено состояние каналов
 		case curChannelStates := <-channelCntrl.ChannelStates:
 			heartbeat.SetChannelsState(curChannelStates)
-			//chief_web.SetChannelStates(curChannelStates)
+			chief_web.SetChannelStates(curChannelStates)
 
 		case <-done:
 			wg.Done()

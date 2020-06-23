@@ -210,12 +210,11 @@ func (c *OldiController) Work() {
 				if c.tcpListenerWork == true {
 					c.stopServer()
 				}
+				var ctx context.Context
+				ctx, c.closeTcpListenerFunc = context.WithCancel(context.Background())
+
+				go c.startServer(ctx, c.tcpLocalPort)
 			}
-
-			var ctx context.Context
-			ctx, c.closeTcpListenerFunc = context.WithCancel(context.Background())
-
-			go c.startServer(ctx, c.tcpLocalPort)
 
 		// получен новый пакет для отправки провайдеру
 		case incomeData := <-c.ToOldiDataChan:
