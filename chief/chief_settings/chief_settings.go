@@ -30,6 +30,7 @@ type ChiefSettings struct {
 }
 
 var chiefSettingsFile = utils.AppPath() + "/config/fmtp_settings.json"
+var loggerSettingsFile = utils.AppPath() + "/config/logger_settings.json"
 
 // ReadFromFile чтение ранее сохраненных настроек из файла
 func (s *ChiefSettings) ReadFromFile() error {
@@ -46,12 +47,17 @@ func (s *ChiefSettings) ReadFromFile() error {
 
 // SaveToFile сохранение настроек в файл
 func (s *ChiefSettings) SaveToFile() error {
-	confData, err := json.Marshal(s)
-	if err != nil {
-		return err
+	if confData, errMrsh := json.Marshal(s); errMrsh != nil {
+		return errMrsh
+	} else if errWriteSetts := ioutil.WriteFile(chiefSettingsFile, utils.JsonPrettyPrint(confData), os.ModePerm); errWriteSetts != nil {
+		return errWriteSetts
 	}
-	if err := ioutil.WriteFile(chiefSettingsFile, utils.JsonPrettyPrint(confData), os.ModePerm); err != nil {
-		return err
+
+	// сохраняем настройки логгера
+	if loggerSettsData, errMrshLog := json.Marshal(s.LoggerSetts); errMrshLog != nil {
+		return errMrshLog
+	} else if errWriteLogSetts := ioutil.WriteFile(loggerSettingsFile, utils.JsonPrettyPrint(loggerSettsData), os.ModePerm); errWriteLogSetts != nil {
+		return errWriteLogSetts
 	}
 	return nil
 }

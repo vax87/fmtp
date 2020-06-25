@@ -207,11 +207,9 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 		}
 	case fmtp.Operational:
 		fsc.processEventMessage(fmtp.RData, fmtpMsg, common.SeverityDebug)
-		fsc.LogMessageChan <- common.LogChannelST(common.SeverityWarning, "in operational")
 		fsc.processDataMessage(fmtpMsg)
 
 	default:
-		fsc.LogMessageChan <- common.LogChannelST(common.SeverityWarning, "in default")
 		fsc.processDataMessage(fmtpMsg)
 	}
 }

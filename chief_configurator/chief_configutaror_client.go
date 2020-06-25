@@ -59,7 +59,7 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 		LoggerSettsChan:        make(chan common.LoggerSettings, 1),
 		ProviderSettsChan:      make(chan []fdps.ProviderSettings, 1),
 		postResultChan:         make(chan httpResult, 1),
-		readLocalSettingsTimer: time.NewTimer(time.Second * 3),
+		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
 	}
 }

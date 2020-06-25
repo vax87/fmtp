@@ -1,0 +1,12 @@
+{
+	"FileSizeKB": 500,
+	"FolderSizeGB": 12,
+	"LoggerPort": 54354,
+	"DbServiceName": "orclcdb",
+	"DbHostname": "192.168.1.24",
+	"DbMaxLogStoreCount": 2400000,
+	"DbPassword": "log",
+	"DbPort": 1521,
+	"DbStoreDays": 30,
+	"DbUser": "fmtp_log"
+}

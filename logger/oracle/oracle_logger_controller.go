@@ -14,7 +14,24 @@ import (
 
 	"fdps/fmtp/chief_logger"
 	"fdps/fmtp/logger/common"
-	"fdps/fmtp/web"
+	"fdps/utils/logger"
+)
+
+const (
+	dbStateKey          = "БД. Состояние подключения:"
+	dbLastConnKey       = "БД. Последнее подключение:"
+	dbLastDisconnKey    = "БД. Последнее отключение:"
+	dbLastErrKey        = "БД. Последняя ошибка:"
+	dbQueueKey          = "Очередь записи (размер / max)"
+	dbCountIncomeKey    = "Кол-во принятых логов с начала работы:"
+	dbInsertCountKey    = "Кол-во записанных логов с начала работы:"
+	dbLastCountCheckKey = "Время последней проверки кол-ва хранимых логов (UTC):"
+	dbLastSizeCheckKey  = "Время последней проверки времени хранения логов (UTC):"
+
+	dbStateOkValue    = "Подключено."    // значение параметра для подключенного состояния
+	dbStateErrorValue = "Не подключено." // значение параметра для не подключенного состояния
+
+	timeFormat = "2006-01-02 15:04:05"
 )
 
 // контроллер, выполняющий запись логов в БД
@@ -90,8 +107,8 @@ func (rlc *OracleLoggerController) Run() {
 	for {
 		select {
 		case newSettings := <-rlc.SettingsChan:
-			web.SetDbQueueInfo(fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize))
-			web.SetDbSettings(fmt.Sprintf("%+v", newSettings))
+
+			logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize), logger.StateDefaultColor)
 
 			if isDbEqual, isStorEqual := rlc.currentSettings.equal(newSettings); !isDbEqual || !isStorEqual {
 				rlc.currentSettings = newSettings
@@ -116,7 +133,8 @@ func (rlc *OracleLoggerController) Run() {
 
 			// получено новое сообщение
 		case newMessage := <-rlc.MessChan:
-			web.SetDbQueueInfo(fmt.Sprintf("%d / %d", rlc.logQueue.Len()+1, logContainerSize))
+			logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len()+1, logContainerSize), logger.StateDefaultColor)
+
 			if rlc.logQueue.Len() < logContainerSize {
 				rlc.logQueue.PushBack(newMessage)
 				rlc.checkQueryQueue()
@@ -243,7 +261,8 @@ func (rlc *OracleLoggerController) checkQueryQueue() {
 			rlc.needCheckLogLifetime = false
 
 			oldLogDate := time.Now().AddDate(0, 0, -rlc.currentSettings.LogStoreDays)
-			web.SetDbCheckLifetime(time.Now().UTC().Format("2006-01-02 15:04:05.000"))
+			logger.SetDebugParam(dbLastSizeCheckKey, time.Now().UTC().Format(timeFormat), logger.StateDefaultColor)
+
 			rlc.execLogQueryChan <- oraCheckLogLifetimeQuery(oldLogDate.Format("2006-01-02 15:04:05"))
 			return
 		}
@@ -262,10 +281,11 @@ func (rlc *OracleLoggerController) checkQueryQueue() {
 					break
 				}
 			}
-			web.AppendDbWroteCount(insetrCnt)
+			logger.SetDebugParam(dbInsertCountKey, strconv.Itoa(insetrCnt), logger.StateDefaultColor)
+
 		}
 
-		web.SetDbQueueInfo(fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize))
+		logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize), logger.StateDefaultColor)
 
 		if curQueryText != "" {
 			if rlc.lastQueryText == "" {
@@ -296,7 +316,7 @@ func (rlc *OracleLoggerController) executeQuery() {
 
 		// пришел запрос проверки кол-ва хранимых логов
 		case <-rlc.execCountQueryChan:
-			web.SetDbCheckCount(time.Now().UTC().Format("2006-01-02 15:04:05.000"))
+			logger.SetDebugParam(dbLastCountCheckKey, time.Now().UTC().Format(timeFormat), logger.StateDefaultColor)
 			_, curErr := rlc.db.Exec(oraCheckLogCountQuery(onlineLogMaxCount, rlc.currentSettings.LogStoreMaxCount))
 			rlc.execResultChan <- curErr
 

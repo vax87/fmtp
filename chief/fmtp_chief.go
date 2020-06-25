@@ -23,8 +23,6 @@ const (
 var workWithDocker bool
 var dockerVersion string
 
-var done = make(chan struct{}, 1)
-
 func initLoggers() {
 	// логгер с web страничкой
 	log_web.Initialize(log_web.LogWebSettings{
