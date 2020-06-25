@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -32,6 +33,10 @@ const (
 	srvStateKey        = "WS FMTP каналов. Состояние:"
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
+	startOldiMsgTag    = "<msg>"
+	endOldiMsgTag      = "</msg>"
+	startOldiAccTag    = "<acc>"
+	endOldiAccTag      = "</acc>"
 )
 
 // сведения об исполняемом файле канала
@@ -67,9 +72,10 @@ type ChiefChannelServer struct {
 
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
-	aodbIdent  int // идентификатор сообщения, отправляемого AODB cервису
-	oldiIdent  int // идентификатор сообщения, отправляемого OLDI cервису
-	withDocker bool
+	aodbIdent    int // идентификатор сообщения, отправляемого AODB cервису
+	oldiIdent    int // идентификатор сообщения, отправляемого OLDI cервису
+	withDocker   bool
+	dataFromOldi []byte // буфер полученных данных OLDI
 }
 
 // состояние FMTP канала, при котором ему отправляем сообщений от AODB
@@ -270,22 +276,62 @@ func (cc *ChiefChannelServer) Work() {
 
 		// получен новый пакет от провайдера OLDI
 		case incomeOldiData := <-cc.IncomeOldiPacketChan:
-			var oldiPkg fdps.FdpsOldiPackage
-			var oldiAcc fdps.FdpsOldiAcknowledge
+			cc.dataFromOldi = append(cc.dataFromOldi, incomeOldiData...)
 
-			if unmPkgErr := xml.Unmarshal(incomeOldiData, &oldiPkg); unmPkgErr == nil {
+			// вырезаем все подтверждения <acc>
+			startAccIdx := strings.Index(string(cc.dataFromOldi), startOldiAccTag)
+			endAccIdx := strings.Index(string(cc.dataFromOldi), endOldiAccTag)
+			hasAcc := (startAccIdx != -1 && endAccIdx != -1 && startAccIdx < endAccIdx)
 
-				chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
-					fmtp.Operational.ToString(), common.DirectionIncoming,
-					fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-						fdps.FdpsAodbService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
-				cc.ProcessOldiPacket(oldiPkg)
+			for {
+				if hasAcc {
+					curAccBytes := cc.dataFromOldi[startAccIdx : endAccIdx+len(endOldiAccTag)-startAccIdx]
+					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag)-startAccIdx:]...)
 
-			} else if unmAccErr := xml.Unmarshal(incomeOldiData, &oldiAcc); unmAccErr == nil {
+					var oldiAcc fdps.FdpsOldiAcknowledge
+					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
 
-				chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
-					fmtp.Operational.ToString(), common.DirectionIncoming,
-					fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
+						chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+							fmtp.Operational.ToString(), common.DirectionIncoming,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
+					}
+
+					startAccIdx = strings.Index(string(cc.dataFromOldi), startOldiAccTag)
+					endAccIdx = strings.Index(string(cc.dataFromOldi), endOldiAccTag)
+					hasAcc = (startAccIdx != -1 && startAccIdx < endAccIdx)
+				} else {
+					break
+				}
+
+			}
+
+			startMsgIdx := strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
+			endMsgIdx := strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
+			hasMsg := (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
+
+			for {
+				if hasMsg {
+
+					curMsgBytes := cc.dataFromOldi[startMsgIdx : endMsgIdx+len(endOldiMsgTag)-startMsgIdx]
+					cc.dataFromOldi = append(cc.dataFromOldi[:startMsgIdx], cc.dataFromOldi[endMsgIdx+len(endOldiMsgTag)-startMsgIdx:]...)
+
+					var oldiPkg fdps.FdpsOldiPackage
+
+					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
+
+						chief_logger.ChiefLog.FmtpLogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+							fmtp.Operational.ToString(), common.DirectionIncoming,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
+								fdps.FdpsAodbService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
+						cc.ProcessOldiPacket(oldiPkg)
+					}
+					startMsgIdx = strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
+					endMsgIdx = strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
+					hasMsg = (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
+
+				} else {
+					break
+				}
 			}
 
 		// получены данные от WS сервера
