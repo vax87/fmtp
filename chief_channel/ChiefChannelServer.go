@@ -476,7 +476,9 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 	for _, val := range cc.channelSetts.ChSettings {
 
-		if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+		//if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+		// от OLDI только cid приходит
+		if val.DataType == fdps.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
 			channelID = val.Id
 			break
 		}
@@ -492,6 +494,8 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 				}
 			}
 		}
+	} else {
+		logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s.", pkg.RemoteAtc)
 	}
 
 	// отправка подтверждения
