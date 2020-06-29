@@ -19,11 +19,11 @@ import (
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/chief_logger"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/chief_logger"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 	"fdps/utils"
 	"fdps/utils/logger"
 	"fdps/utils/web_sock"

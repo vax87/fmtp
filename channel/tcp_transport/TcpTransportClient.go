@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"sync"
 
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 )
 
 // клиентское TCP подключение

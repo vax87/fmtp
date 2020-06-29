@@ -1,5 +1,7 @@
 package oracle
 
+import "strconv"
+
 //"encoding/json"
 //"io/ioutil"
 //"os"
@@ -19,16 +21,27 @@ type OracleLoggerSettings struct {
 }
 
 // сравнение настроек в части настроек БД и настроек хранения логов
-func (rls *OracleLoggerSettings) equal(otherRls OracleLoggerSettings) (bool, bool) {
+func (s *OracleLoggerSettings) equal(otherRls OracleLoggerSettings) (bool, bool) {
 	isDbEqual :=
 		//rls.NeedWork == otherRls.NeedWork &&
-		rls.Hostname == otherRls.Hostname &&
-			rls.Port == otherRls.Port &&
-			rls.ServiceName == otherRls.ServiceName &&
-			rls.UserName == otherRls.UserName &&
-			rls.Password == otherRls.Password
-	isStorEqual := rls.LogStoreMaxCount == otherRls.LogStoreMaxCount &&
-		rls.LogStoreDays == otherRls.LogStoreDays
+		s.Hostname == otherRls.Hostname &&
+			s.Port == otherRls.Port &&
+			s.ServiceName == otherRls.ServiceName &&
+			s.UserName == otherRls.UserName &&
+			s.Password == otherRls.Password
+	isStorEqual := s.LogStoreMaxCount == otherRls.LogStoreMaxCount &&
+		s.LogStoreDays == otherRls.LogStoreDays
 
 	return isDbEqual, isStorEqual
+}
+
+// ConnString - строка подключения к БД в формате
+// user/pass@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))
+func (s *OracleLoggerSettings) ConnString() string {
+	return s.UserName + "/" +
+		s.Password + "@" +
+		"(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=" + s.Hostname +
+		")(PORT=" + strconv.Itoa(s.Port) +
+		")))(CONNECT_DATA=(SERVICE_NAME=" + s.ServiceName + ")))"
+
 }

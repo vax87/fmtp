@@ -12,7 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
 )
 
 // FmtpWeb базования часть web странички

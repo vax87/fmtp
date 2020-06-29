@@ -2,9 +2,9 @@ package chief_configurator
 
 import (
 	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/fdps"
-	"fdps/fmtp/logger/common"
 	"fdps/utils"
 )
 
@@ -35,7 +35,7 @@ type MessageHeader struct {
 // контроллер (chief) -> конфигуратор
 type SettingsRequestMsg struct {
 	MessageHeader
-	Versions    []string `json:"AvailableVersions"` // список доступных версий приложения 'канал'
+	Versions    []string `json:"AvailableVersions"` // список доступных версий приложения канал
 	IPAddresses []string `json:"ControllerIPs"`     // список сетевых адресов контроллера
 }
 

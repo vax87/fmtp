@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"fdps/fmtp/channel/channel_settings"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
-	"fdps/fmtp/logger/common"
 	"fdps/utils"
 )
 

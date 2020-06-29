@@ -4,13 +4,12 @@ import (
 	"log"
 	"sync"
 
+	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/chief_worker"
-	"fdps/fmtp/chief_logger"
 
 	"fdps/utils"
 	"fdps/utils/logger"
-	"fdps/utils/logger/log_ljack"
 	"fdps/utils/logger/log_std"
 	"fdps/utils/logger/log_web"
 )
@@ -37,13 +36,13 @@ func initLoggers() {
 	log_web.SetVersion(appVersion)
 
 	// логгер с сохранением в файлы
-	var ljackSetts log_ljack.LjackSettings
-	ljackSetts.GenDefault()
-	ljackSetts.FilesName = appName + ".log"
-	if err := log_ljack.Initialize(ljackSetts); err != nil {
-		logger.PrintfErr("Ошибка инициализации логгера lumberjack. Ошибка: %s", err.Error())
-	}
-	logger.AppendLogger(log_ljack.LogLjack)
+	// var ljackSetts log_ljack.LjackSettings
+	// ljackSetts.GenDefault()
+	// ljackSetts.FilesName = appName + ".log"
+	// if err := log_ljack.Initialize(ljackSetts); err != nil {
+	// 	logger.PrintfErr("Ошибка инициализации логгера lumberjack. Ошибка: %s", err.Error())
+	// }
+	// logger.AppendLogger(log_ljack.LogLjack)
 
 	logger.AppendLogger(log_std.LogStd)
 

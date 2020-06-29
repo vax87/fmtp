@@ -4,16 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	_ "github.com/godror/godror"
 	"github.com/phf/go-queue/queue"
-	_ "gopkg.in/goracle.v2"
 
-	"fdps/fmtp/chief_logger"
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/utils/logger"
 )
 
@@ -36,9 +34,9 @@ const (
 
 // контроллер, выполняющий запись логов в БД
 type OracleLoggerController struct {
-	SettingsChan chan OracleLoggerSettings            // канал приема новых настроек контроллера
-	MessChan     chan common.LogMessage               // канал приема новых сообщений
-	StateChan    chan chief_logger.LoggerStateMessage // канал отправки состояния подключения к БД
+	SettingsChan chan OracleLoggerSettings // канал приема новых настроек контроллера
+	MessChan     chan common.LogMessage    // канал приема новых сообщений
+	StateChan    chan common.LoggerState   // канал отправки состояния подключения к БД
 
 	currentSettings OracleLoggerSettings
 	closeChan       chan struct{} // канал для передачи сигнала закрытия подключения к БД.
@@ -65,8 +63,6 @@ type OracleLoggerController struct {
 	curInsertCount uint64 // кол-во выполнненых запросов INSERT (для проверки кол-ва хранимых логов)
 	curDbErrorText string // текст текущей ошибки при работе с БД
 	lastQueryText  string // текст последнего запроса (при возникновении ошибки при упешном подключении выполнить еще раз)
-
-	loggerVersion string // версия софта, считанная из переменной окружения
 }
 
 // конструктор
@@ -78,7 +74,7 @@ func NewOracleController() *OracleLoggerController {
 func (rlc *OracleLoggerController) Init() *OracleLoggerController {
 	rlc.MessChan = make(chan common.LogMessage, 1024)
 	rlc.SettingsChan = make(chan OracleLoggerSettings)
-	rlc.StateChan = make(chan chief_logger.LoggerStateMessage)
+	rlc.StateChan = make(chan common.LoggerState, 1)
 
 	rlc.canExecute = false
 	rlc.needCheckLogCount = true
@@ -92,11 +88,6 @@ func (rlc *OracleLoggerController) Init() *OracleLoggerController {
 	rlc.pingDbTicker = time.NewTicker(3 * time.Second)
 	rlc.connectDbTicker = time.NewTicker(10 * time.Second)
 	rlc.logLifetimeTicker = time.NewTicker(12 * time.Hour)
-
-	rlc.loggerVersion = os.Getenv("LoggerVersion")
-	if rlc.loggerVersion == "" {
-		rlc.loggerVersion = "???"
-	}
 
 	return rlc
 }
@@ -120,7 +111,12 @@ func (rlc *OracleLoggerController) Run() {
 					//if rlc.currentSettings.NeedWork {
 					curErr := rlc.connectToDb()
 					if curErr != nil {
-						rlc.StateChan <- chief_logger.CreateLoggerStateMsg(curErr, rlc.loggerVersion)
+						rlc.StateChan <- common.LoggerState{
+							LoggerConnected:   common.LoggerStateOk,
+							LoggerDbConnected: common.LoggerStateError,
+							LoggerDbError:     curErr.Error(),
+							LoggerVersion:     "",
+						}
 					}
 					//}
 				}
@@ -143,14 +139,20 @@ func (rlc *OracleLoggerController) Run() {
 			// пришел результат выполнения запроса из горутины
 		case execErr := <-rlc.execResultChan:
 			if execErr != nil {
-				log.Println("Error executing query ", execErr)
+				fmt.Println("Error executing query %v", execErr)
+				//log.Fatal("")
 				if strings.Contains(execErr.Error(), "database is closed") ||
 					strings.Contains(execErr.Error(), "server is not accepting clients") {
 					rlc.disconnectFromDb()
 				} else {
 					rlc.canExecute = true
 				}
-				rlc.StateChan <- chief_logger.CreateLoggerStateMsg(execErr, rlc.loggerVersion)
+				rlc.StateChan <- common.LoggerState{
+					LoggerConnected:   common.LoggerStateOk,
+					LoggerDbConnected: common.LoggerStateError,
+					LoggerDbError:     execErr.Error(),
+					LoggerVersion:     "",
+				}
 			} else {
 				rlc.lastQueryText = ""
 				rlc.canExecute = true
@@ -164,9 +166,20 @@ func (rlc *OracleLoggerController) Run() {
 				curErr := rlc.heartbeat()
 
 				if curErr != nil {
-					rlc.StateChan <- chief_logger.CreateLoggerStateMsg(curErr, rlc.loggerVersion)
+					rlc.StateChan <- common.LoggerState{
+						LoggerConnected:   common.LoggerStateOk,
+						LoggerDbConnected: common.LoggerStateError,
+						LoggerDbError:     curErr.Error(),
+						LoggerVersion:     "",
+					}
 				} else {
-					rlc.StateChan <- chief_logger.CreateLoggerStateMsg(nil, rlc.loggerVersion)
+
+					rlc.StateChan <- common.LoggerState{
+						LoggerConnected:   common.LoggerStateOk,
+						LoggerDbConnected: common.LoggerStateOk,
+						LoggerDbError:     "",
+						LoggerVersion:     "",
+					}
 				}
 			}
 
@@ -175,9 +188,19 @@ func (rlc *OracleLoggerController) Run() {
 			if !rlc.dbSuccess { //&& rlc.currentSettings.NeedWork {
 				curErr := rlc.connectToDb()
 				if curErr != nil {
-					rlc.StateChan <- chief_logger.CreateLoggerStateMsg(curErr, rlc.loggerVersion)
+					rlc.StateChan <- common.LoggerState{
+						LoggerConnected:   common.LoggerStateOk,
+						LoggerDbConnected: common.LoggerStateError,
+						LoggerDbError:     curErr.Error(),
+						LoggerVersion:     "",
+					}
 				} else {
-					rlc.StateChan <- chief_logger.CreateLoggerStateMsg(nil, rlc.loggerVersion)
+					rlc.StateChan <- common.LoggerState{
+						LoggerConnected:   common.LoggerStateOk,
+						LoggerDbConnected: common.LoggerStateOk,
+						LoggerDbError:     "",
+						LoggerVersion:     "",
+					}
 				}
 			}
 
@@ -194,16 +217,10 @@ func (rlc *OracleLoggerController) connectToDb() error {
 
 	// user/pass@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))
 	var errOpen error
-	var connString string = rlc.currentSettings.UserName + "/" +
-		rlc.currentSettings.Password + "@" +
-		"(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=" + rlc.currentSettings.Hostname +
-		")(PORT=" + strconv.Itoa(rlc.currentSettings.Port) +
-		")))(CONNECT_DATA=(SERVICE_NAME=" + rlc.currentSettings.ServiceName + ")))"
-
-	rlc.db, errOpen = sql.Open("goracle", connString)
+	rlc.db, errOpen = sql.Open("godror", rlc.currentSettings.ConnString())
 
 	if errOpen != nil {
-		log.Println("Error opening database: ", errOpen)
+		log.Println("Error opening database: %v", errOpen)
 
 		rlc.disconnectFromDb()
 		return errOpen
@@ -211,7 +228,7 @@ func (rlc *OracleLoggerController) connectToDb() error {
 
 	errPing := rlc.db.Ping()
 	if errPing != nil {
-		log.Println("Error ping database: ", errPing)
+		log.Println("Error ping database: %v", errPing)
 		rlc.disconnectFromDb()
 		return errPing
 	} else {
@@ -232,7 +249,7 @@ func (rlc *OracleLoggerController) heartbeat() error {
 	var heartbeatInt int
 	errHbt := rlc.db.QueryRow("SELECT 7 FROM dual").Scan(&heartbeatInt)
 	if errHbt != nil {
-		log.Println("Database heartbeat error: ", errHbt)
+		log.Println("Database heartbeat error: %v", errHbt)
 		rlc.disconnectFromDb()
 	}
 	return errHbt
@@ -269,21 +286,21 @@ func (rlc *OracleLoggerController) checkQueryQueue() {
 
 		var curQueryText string // текст текущего запроса
 
-		if rlc.lastQueryText != "" {
-			curQueryText = rlc.lastQueryText
-		} else {
-			var insetrCnt int
-			for insetrCnt = 0; insetrCnt < oraMaxInsertCount; insetrCnt++ {
-				if rlc.logQueue.Len() > 0 {
-					oraInsertLogBeginQuery(&curQueryText, common.LogMessage(rlc.logQueue.PopFront().(common.LogMessage)))
-					rlc.curInsertCount++
-				} else {
-					break
-				}
+		// if rlc.lastQueryText != "" {
+		// 	curQueryText = rlc.lastQueryText
+		// } else {
+		var insetrCnt int
+		for insetrCnt = 0; insetrCnt < oraMaxInsertCount; insetrCnt++ {
+			if rlc.logQueue.Len() > 0 {
+				oraInsertLogBeginQuery(&curQueryText, common.LogMessage(rlc.logQueue.PopFront().(common.LogMessage)))
+				rlc.curInsertCount++
+			} else {
+				break
 			}
-			logger.SetDebugParam(dbInsertCountKey, strconv.Itoa(insetrCnt), logger.StateDefaultColor)
-
 		}
+		logger.SetDebugParam(dbInsertCountKey, strconv.Itoa(insetrCnt), logger.StateDefaultColor)
+
+		//}
 
 		logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize), logger.StateDefaultColor)
 
@@ -342,28 +359,28 @@ func (rlc *OracleLoggerController) initDbStructure() {
 		curStmnt = oraCreatePrimaryKeyQuery(storageLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 
 		// последовательность для автоинкремента id таблицы storage_log.
 		curStmnt = oraCreateSequenceQuery(storageLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 
 		// триггер для автоинкремента id таблицы storage_log.
 		curStmnt = oraCreateTriggerQuery(storageLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 
 		// представление с онлайн сообщениями.
 		curStmnt = oraCreateLogViewQuery(storageLogViewName, storageLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 	}
 
@@ -371,33 +388,33 @@ func (rlc *OracleLoggerController) initDbStructure() {
 	curStmnt = oraCreateLogTableQuery(onlineLogTableName)
 	_, curError = rlc.db.Exec(curStmnt)
 	if curError != nil {
-		log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 	} else {
 		// создание первичного ключа таблицы с онлайн сообщениями .
 		curStmnt = oraCreatePrimaryKeyQuery(onlineLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 
 		// последовательность для автоинкремента id таблицы online_log.
 		curStmnt = oraCreateSequenceQuery(onlineLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 
 		// триггер для автоинкремента id таблицы online_log.
 		curStmnt = oraCreateTriggerQuery(onlineLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 		// представление с сообщениями для долговременного хранения.
 		curStmnt = oraCreateLogViewQuery(onlineLogViewName, onlineLogTableName)
 		_, curError = rlc.db.Exec(curStmnt)
 		if curError != nil {
-			log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 		}
 	}
 
@@ -405,20 +422,20 @@ func (rlc *OracleLoggerController) initDbStructure() {
 	curStmnt = oraPackageQuery()
 	_, curError = rlc.db.Exec(curStmnt)
 	if curError != nil {
-		log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 	}
 
 	// тело пакета для удаления старых и лишних логов.
 	curStmnt = oraPackageBodyQuery()
 	_, curError = rlc.db.Exec(curStmnt)
 	if curError != nil {
-		log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 	}
 
 	// заголовок пакета для удаления старых и лишних логов.
 	curStmnt = "COMMIT"
 	_, curError = rlc.db.Exec(curStmnt)
 	if curError != nil {
-		log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
 	}
 }

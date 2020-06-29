@@ -2,15 +2,13 @@ package chief_worker
 
 import (
 	"fdps/fmtp/chief/aodb"
+	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief/heartbeat"
 	"fdps/fmtp/chief/oldi"
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/chief_logger"
-	"fdps/utils"
-	"fdps/utils/web_sock"
 	"sync"
 )
 
@@ -53,12 +51,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 
 		// получены настройки логгера
 		case loggerSetts := <-chiefConfClient.LoggerSettsChan:
-			chief_logger.ChiefLog.SettsChan <- web_sock.WebSockClientSettings{
-				ServerAddress:     "127.0.0.1",
-				ServerPort:        loggerSetts.LoggerPort,
-				UrlPath:           utils.FmtpLoggerWsPath,
-				ReconnectInterval: 3,
-			}
+			chief_logger.ChiefLog.SettsChan <- loggerSetts
 
 		// получены настройки провайера AODB
 		case providerSetts := <-chiefConfClient.ProviderSettsChan:

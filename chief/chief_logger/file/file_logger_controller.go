@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
 )
 
 var fileLogger lumberjack.Logger
@@ -45,6 +45,14 @@ type FileLoggerController struct {
 	MessChan     chan common.LogMessage  // канал, принимающий сообщения
 
 	currentSettings FileLoggerSettings // текщие настройки контроллера
+}
+
+// CreateFileLoggerController - конструктор
+func CreateFileLoggerController() *FileLoggerController {
+	return &FileLoggerController{
+		MessChan:     make(chan common.LogMessage, 1024),
+		SettingsChan: make(chan FileLoggerSettings),
+	}
 }
 
 // работа контроллера

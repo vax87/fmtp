@@ -15,17 +15,6 @@
                 "GOARC": "amd64"
             }
         },
-        {
-            "name": "fmtp_logger",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceFolder}/logger/fmtp_logger.go",
-            "env": {
-                "GOOS": "windows",
-                "GOARC": "amd64"
-            }
-        },
         {            
             "name": "fmtp_channel",
             "type": "go",
@@ -36,8 +25,6 @@
                 "GOOS": "windows",
                 "GOARC": "amd64"
             },
-            //"args": ["34533", "16", "W", "U", "OLDI"]
-            //"args": ["34533", "13", "W", "U", "OLDI"]
             "args": ["34532", "11", "W", "U", "OLDI", "channel", "13111"]
         }
     ]

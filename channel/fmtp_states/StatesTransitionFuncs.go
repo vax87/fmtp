@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 )
 
 // ----------------------------состояния IDLE----------------------------

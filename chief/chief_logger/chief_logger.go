@@ -2,103 +2,74 @@ package chief_logger
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log"
-	"sync"
-	"time"
 
-	"github.com/phf/go-queue/queue"
-
-	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
+	"fdps/fmtp/chief/chief_logger/file"
+	"fdps/fmtp/chief/chief_logger/oracle"
+	"fdps/fmtp/chief/heartbeat"
 	"fdps/utils/logger"
-	"fdps/utils/web_sock"
-)
-
-const (
-	// максимальное кол-во логов в logCache
-	maxLogQueueSize = 30000
-
-	// максимальное кол-во отправляемых сообщений по сети
-	maxLogSendCount = 20
 )
 
 // ChiefLogger логгер, отправляющего сообщения по таймеру сервису fmtp_logger
 type ChiefLogger struct {
-	sync.Mutex
-	SettsChan    chan web_sock.WebSockClientSettings
-	logQueue     queue.Queue  // очередь сообщений для отправки
-	loggerTicker *time.Ticker // тикер отправки сообщений логгеру
-	loggerClnt   *LoggerClient
-	FmtpLogChan  chan common.LogMessage
+	SettsChan      chan common.LoggerSettings
+	FmtpLogChan    chan common.LogMessage
+	fileLogCntrl   *file.FileLoggerController     // контроллер записи в файлы
+	oracleLogCntrl *oracle.OracleLoggerController // контроллер записи в БД oracle
 }
-
-var chiefLogDone = make(chan struct{}, 1)
-var ChiefLog = NewChiefLogger()
 
 // NewChiefLogger - конструктор
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
-		SettsChan:    make(chan web_sock.WebSockClientSettings, 1),
-		loggerTicker: time.NewTicker(time.Second),
-		loggerClnt:   NewLoggerClient(chiefLogDone),
-		FmtpLogChan:  make(chan common.LogMessage, 10),
+		SettsChan:      make(chan common.LoggerSettings, 1),
+		FmtpLogChan:    make(chan common.LogMessage, 10),
+		fileLogCntrl:   file.CreateFileLoggerController(),
+		oracleLogCntrl: oracle.NewOracleController(),
 	}
 }
+
+var ChiefLog = NewChiefLogger()
 
 // Work - основной цикл работы
 func (l *ChiefLogger) Work() {
 
-	go l.loggerClnt.Work()
+	go l.fileLogCntrl.Run()
+	go l.oracleLogCntrl.Run()
 
 	for {
 		select {
 
 		case newSetts := <-l.SettsChan:
-			l.loggerClnt.SettChan <- newSetts
+			l.fileLogCntrl.SettingsChan <- file.FileLoggerSettings{
+				LogFileSizeKb:   newSetts.FileSizeKB,
+				LogFolderSizeGb: newSetts.FolderSizeGB,
+				LogStoreDays:    newSetts.DbStoreDays,
+			}
+
+			l.oracleLogCntrl.SettingsChan <- oracle.OracleLoggerSettings{
+				Hostname:         newSetts.DbHostname,
+				Port:             newSetts.DbPort,
+				ServiceName:      newSetts.DbServiceName,
+				UserName:         newSetts.DbUser,
+				Password:         newSetts.DbPassword,
+				LogStoreMaxCount: newSetts.DbMaxLogStoreCount,
+				LogStoreDays:     newSetts.DbStoreDays,
+			}
+
+		case oraLoggerState := <-l.oracleLogCntrl.StateChan:
+			heartbeat.SetLoggerState(oraLoggerState)
 
 		case curMsg := <-l.FmtpLogChan:
 			l.processNewLogMsg(curMsg)
-
-		// сработал тикер отправки логов
-		case <-l.loggerTicker.C:
-			if l.loggerClnt.IsConnected() && l.logQueue.Len() > 0 {
-
-				logMsg := LoggerMsgSlice{MessageHeader: MessageHeader{Header: LogMessagesHeader}}
-
-				for nn := 0; nn < maxLogSendCount; nn++ {
-					if l.logQueue.Len() > 0 {
-						curLogMsg := common.LogMessage(l.logQueue.PopFront().(common.LogMessage))
-						curLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
-						logMsg.Messages = append(logMsg.Messages, curLogMsg)
-					} else {
-						break
-					}
-				}
-
-				if len(logMsg.Messages) > 0 {
-					dataToSend, err := json.Marshal(logMsg)
-					if err == nil {
-						l.loggerClnt.SendDataChan <- dataToSend
-					} else {
-						log.Println("Ошибка маршаллинга сообщения логов. Ошибка:", err.Error())
-					}
-				}
-			}
 		}
 	}
 }
 
 // постановка сообщения в очередь.
 func (l ChiefLogger) processNewLogMsg(logMsg common.LogMessage) {
-	l.Lock()
-	defer l.Unlock()
-
-	if l.logQueue.Len() >= maxLogQueueSize {
-		l.logQueue.PopFront()
-	}
-	l.logQueue.PushBack(logMsg)
+	l.fileLogCntrl.MessChan <- logMsg
+	l.oracleLogCntrl.MessChan <- logMsg
 }
 
 // Printf реализация интерфейса logger

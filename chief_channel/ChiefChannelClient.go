@@ -2,7 +2,7 @@ package chief_channel
 
 import (
 	"encoding/json"
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/web"
 	"fdps/utils"
 	"fdps/utils/web_sock"
