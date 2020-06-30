@@ -555,8 +555,6 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
-	logger.PrintfWarn("Остановка каналов: %v", idsToStop)
-
 STOPL:
 	for _, stopID := range idsToStop {
 		if channelBin, ok := cc.ChannelBinMap[stopID]; ok {
@@ -577,7 +575,6 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
-	logger.PrintfWarn("Запуск каналов: %v", idsToStart)
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
@@ -668,8 +665,6 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	}
 	imageName += chief_configurator.ChannelImageName + ":" + chSett.Version
 
-	logger.PrintfInfo("Создание контейнера из образа %s", imageName)
-
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: imageName,
@@ -691,9 +686,9 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		curContainerName)
 
 	if crErr != nil {
-		logger.PrintfErr("Ошибка создания docker контейнера %s. Ошибка: %v.", curContainerName, crErr)
+		logger.PrintfErr("Ошибка создания docker контейнера %s. Используемый образ: %s. Ошибка: %v.", curContainerName, imageName, crErr)
 	} else {
-		logger.PrintfInfo("Создан docker контейнер %s.", curContainerName)
+		logger.PrintfInfo("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
