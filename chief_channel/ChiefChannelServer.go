@@ -555,6 +555,8 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
+	logger.PrintfWarn("Остановка каналов: %v", idsToStop)
+
 STOPL:
 	for _, stopID := range idsToStop {
 		if channelBin, ok := cc.ChannelBinMap[stopID]; ok {
@@ -575,6 +577,7 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
+	logger.PrintfWarn("Запуск каналов: %v", idsToStart)
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
@@ -707,18 +710,21 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			if cntErr != nil {
 				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
 			}
-		case <-statusCh:
+		case curStatus := <-statusCh:
+			logger.PrintfInfo("Получен статус docker контейнера %s. Ошибка: %v. Код: %v", curContainerName, curStatus.Error.Message, curStatus.StatusCode)
 
 		case <-killChan:
+			logger.PrintfInfo("Команда завершить docker контейнер %s.", curContainerName)
+
 			var stopDur time.Duration = 100 * time.Millisecond
 
 			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
 				logger.PrintfInfo("Остановлен docker контейнер %s.", curContainerName)
-				if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
-					logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
-				} else {
-					logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
-				}
+				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
+				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
+				// } else {
+				// 	logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
+				// }
 			} else {
 				logger.PrintfErr("Ошибка остановки docker контейнера %s. Ошибка %v", curContainerName, stopErr)
 			}
