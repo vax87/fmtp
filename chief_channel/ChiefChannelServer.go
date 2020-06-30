@@ -663,6 +663,8 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	}
 	imageName += chief_configurator.ChannelImageName + ":" + chSett.Version
 
+	logger.PrintfInfo("Создание контейнера из образа %s", imageName)
+
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: imageName,
@@ -677,7 +679,8 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    true,
+			//AutoRemove:    true,
+			AutoRemove: false,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -701,7 +704,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		select {
 		case cntErr := <-errCh:
 			if cntErr != nil {
-				logger.PrintfInfo("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
+				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
 			}
 		case <-statusCh:
 

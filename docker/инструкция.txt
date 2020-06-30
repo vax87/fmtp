@@ -1,5 +1,6 @@
 1. Загружаем docker образы из архива
-    архивы лежать в /Deployment/FMTP/images-tars/0.0.1 ( для примера версия 0.0.1 )
+    архивы лежат в /Deployment/FMTP/images-tars/fmtp_channel/0.0.1 ( для примера версия 0.0.1 )
+                    /Deployment/FMTP/images-tars/fmtp_chief/0.0.1
     
     docker image load -i fmtp_channel.tar
     docker image load -i fmtp_chief.tar   

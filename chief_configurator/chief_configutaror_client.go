@@ -82,6 +82,8 @@ func (cc *ChiefConfiguratorClient) Work() {
 						if unmErr = json.Unmarshal(postRes.result, &ChiefCfg); unmErr != nil {
 							logger.PrintfErr("Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: %s. Ошибка: %s.", string(postRes.result), unmErr.Error())
 						} else {
+							logger.PrintfErr("Получены настройки от конфигуратора. %+v.", ChiefCfg)
+
 							//chiefCfg = &curMsg
 							ChiefCfg.IsInitialised = true
 							cc.readLocalSettingsTimer.Stop()
