@@ -103,6 +103,10 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			heartbeat.SetChannelsState(curChannelStates)
 			chief_web.SetChannelStates(curChannelStates)
 
+		// получено сообщение журнала
+		case curLogMsg := <-channelCntrl.LogChan:
+			chief_logger.ChiefLog.FmtpLogChan <- curLogMsg
+
 		case <-done:
 			wg.Done()
 			return
