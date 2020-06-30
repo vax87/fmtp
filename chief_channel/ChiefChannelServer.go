@@ -720,11 +720,11 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
 				logger.PrintfInfo("Остановлен docker контейнер %s.", curContainerName)
-				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
-				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
-				// } else {
-				// 	logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
-				// }
+				if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
+					logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
+				} else {
+					logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
+				}
 			} else {
 				logger.PrintfErr("Ошибка остановки docker контейнера %s. Ошибка %v", curContainerName, stopErr)
 			}
