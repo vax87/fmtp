@@ -3,7 +3,6 @@ package oracle
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +29,12 @@ const (
 	dbStateErrorValue = "Не подключено." // значение параметра для не подключенного состояния
 
 	timeFormat = "2006-01-02 15:04:05"
+
+	//const avgLogMessageSize = 700                     // средний размер одного сообщения логов (байт).
+	logContainerSize  = 200 * 1024 * 1024 / 700 // размер контейнера с сообщениями (200 МБ / avgLogMessageSize_).
+	oraMaxInsertCount = 1                       // максимальное кол-во вставляемых элементов в одном INSERT (oracle)
+	insertCountCheck  = 1000                    // кол-во запросов INSERT в БД, после чего следует проверить кол-во хранимых сообщений
+	onlineLogMaxCount = 1000                    // кол-во хранимых логов в таблице онлайн сообщений
 )
 
 // контроллер, выполняющий запись логов в БД
@@ -132,6 +137,11 @@ func (rlc *OracleLoggerController) Run() {
 			logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len()+1, logContainerSize), logger.StateDefaultColor)
 
 			if rlc.logQueue.Len() < logContainerSize {
+				// проверяем длину текста (max 2000)
+				if len(newMessage.Text) > maxTextLen {
+					newMessage.Text = newMessage.Text[:maxTextLen]
+				}
+
 				rlc.logQueue.PushBack(newMessage)
 				rlc.checkQueryQueue()
 			}
@@ -139,8 +149,8 @@ func (rlc *OracleLoggerController) Run() {
 			// пришел результат выполнения запроса из горутины
 		case execErr := <-rlc.execResultChan:
 			if execErr != nil {
-				fmt.Println("Error executing query %v", execErr)
-				//log.Fatal("")
+				fmt.Println("Error executing query ", execErr)
+				//fmt.Fatal("")
 				if strings.Contains(execErr.Error(), "database is closed") ||
 					strings.Contains(execErr.Error(), "server is not accepting clients") {
 					rlc.disconnectFromDb()
@@ -220,7 +230,7 @@ func (rlc *OracleLoggerController) connectToDb() error {
 	rlc.db, errOpen = sql.Open("godror", rlc.currentSettings.ConnString())
 
 	if errOpen != nil {
-		log.Println("Error opening database: %v", errOpen)
+		fmt.Println("Error opening database: ", errOpen)
 
 		rlc.disconnectFromDb()
 		return errOpen
@@ -228,11 +238,11 @@ func (rlc *OracleLoggerController) connectToDb() error {
 
 	errPing := rlc.db.Ping()
 	if errPing != nil {
-		log.Println("Error ping database: %v", errPing)
+		fmt.Println("Error ping database: ", errPing)
 		rlc.disconnectFromDb()
 		return errPing
 	} else {
-		log.Println("Database is opened")
+		fmt.Println("Database is opened")
 		rlc.initDbStructure()
 
 		rlc.dbSuccess = true
@@ -249,7 +259,7 @@ func (rlc *OracleLoggerController) heartbeat() error {
 	var heartbeatInt int
 	errHbt := rlc.db.QueryRow("SELECT 7 FROM dual").Scan(&heartbeatInt)
 	if errHbt != nil {
-		log.Println("Database heartbeat error: %v", errHbt)
+		fmt.Println("Database heartbeat error: ", errHbt)
 		rlc.disconnectFromDb()
 	}
 	return errHbt
@@ -328,6 +338,7 @@ func (rlc *OracleLoggerController) executeQuery() {
 		select {
 		// пришел запрос добавления сообщения логов
 		case logQueryText := <-rlc.execLogQueryChan:
+			//fmt.Println("Executing query %v", logQueryText)
 			_, curErr := rlc.db.Exec(logQueryText)
 			rlc.execResultChan <- curErr
 
@@ -351,36 +362,31 @@ func (rlc *OracleLoggerController) initDbStructure() {
 
 	// таблица с сообщениями для долговременного хранения.
 	curStmnt = oraCreateLogTableQuery(storageLogTableName)
-	_, curError = rlc.db.Exec(curStmnt)
-	if curError != nil {
-		log.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
+	if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+		fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 	} else {
 		// создание первичного ключа таблицы с сообщениями для долговременного хранения.
 		curStmnt = oraCreatePrimaryKeyQuery(storageLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 
-		// последовательность для автоинкремента id таблицы storage_log.
+		// последовательность для автоинкремента id таблицы storage_fmt.
 		curStmnt = oraCreateSequenceQuery(storageLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 
-		// триггер для автоинкремента id таблицы storage_log.
+		// триггер для автоинкремента id таблицы storage_fmt.
 		curStmnt = oraCreateTriggerQuery(storageLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 
 		// представление с онлайн сообщениями.
 		curStmnt = oraCreateLogViewQuery(storageLogViewName, storageLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 	}
 
@@ -388,54 +394,47 @@ func (rlc *OracleLoggerController) initDbStructure() {
 	curStmnt = oraCreateLogTableQuery(onlineLogTableName)
 	_, curError = rlc.db.Exec(curStmnt)
 	if curError != nil {
-		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		fmt.Println("Error execute statement: %s \t Error: ", curStmnt, curError)
 	} else {
 		// создание первичного ключа таблицы с онлайн сообщениями .
 		curStmnt = oraCreatePrimaryKeyQuery(onlineLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 
-		// последовательность для автоинкремента id таблицы online_log.
+		// последовательность для автоинкремента id таблицы online_fmt.
 		curStmnt = oraCreateSequenceQuery(onlineLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 
-		// триггер для автоинкремента id таблицы online_log.
+		// триггер для автоинкремента id таблицы online_fmt.
 		curStmnt = oraCreateTriggerQuery(onlineLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 		// представление с сообщениями для долговременного хранения.
 		curStmnt = oraCreateLogViewQuery(onlineLogViewName, onlineLogTableName)
-		_, curError = rlc.db.Exec(curStmnt)
-		if curError != nil {
-			log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+		if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+			fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 		}
 	}
 
 	// заголовок пакета для удаления старых и лишних логов.
 	curStmnt = oraPackageQuery()
-	_, curError = rlc.db.Exec(curStmnt)
-	if curError != nil {
-		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+	if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+		fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 	}
 
 	// тело пакета для удаления старых и лишних логов.
 	curStmnt = oraPackageBodyQuery()
-	_, curError = rlc.db.Exec(curStmnt)
-	if curError != nil {
-		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+	if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+		fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 	}
 
 	// заголовок пакета для удаления старых и лишних логов.
 	curStmnt = "COMMIT"
-	_, curError = rlc.db.Exec(curStmnt)
-	if curError != nil {
-		log.Println("Error execute statement: %s \t Error: %v", curStmnt, curError)
+	if _, curError = rlc.db.Exec(curStmnt); curError != nil {
+		fmt.Println("Error execute statement: ", curStmnt, "\t Error: ", curError)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fdps/fmtp/chief/chief_logger/file"
 	"fdps/fmtp/chief/chief_logger/oracle"
 	"fdps/fmtp/chief/heartbeat"
+	"fdps/fmtp/chief_configurator"
 	"fdps/utils/logger"
 )
 
@@ -68,6 +69,7 @@ func (l *ChiefLogger) Work() {
 
 // постановка сообщения в очередь.
 func (l ChiefLogger) processNewLogMsg(logMsg common.LogMessage) {
+	logMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
 	l.fileLogCntrl.MessChan <- logMsg
 	l.oracleLogCntrl.MessChan <- logMsg
 }

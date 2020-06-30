@@ -3,9 +3,16 @@ package oracle
 import (
 	"fmt"
 
-	//	"strings"
-
 	"fdps/fmtp/chief/chief_logger/common"
+)
+
+const (
+	onlineLogTableName  = "fmtp_online"
+	storageLogTableName = "fmtp_storage"
+	onlineLogViewName   = "fmtp_online_vw"
+	storageLogViewName  = "fmtp_storage_vw"
+
+	maxTextLen = 2000
 )
 
 // создать таблицу с логами.
@@ -22,12 +29,28 @@ func oraCreateLogTableQuery(tableName string) string {
 		FmtpType NVARCHAR2(15),
 		Direction NVARCHAR2(15),
 		DateTime NVARCHAR2(30) NOT NULL,
-		Text NVARCHAR2(2000) NOT NULL)`, tableName)
+		Text NVARCHAR2(%d) NOT NULL)`, tableName, maxTextLen)
 }
 
 // создать первичный ключ в таблице логов.
 func oraCreatePrimaryKeyQuery(tableName string) string {
 	return fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s_PK PRIMARY KEY(LOGID)", tableName, tableName)
+}
+
+// создать последовательность для автоинкремента.
+func oraCreateSequenceQuery(tableName string) string {
+	return fmt.Sprintf("CREATE SEQUENCE %s_ID_SEQ START WITH 1 NOCACHE ORDER", tableName)
+}
+
+// создать триггер для автоинкремента.
+func oraCreateTriggerQuery(tableName string) string {
+	return fmt.Sprintf(`CREATE OR REPLACE TRIGGER %s_ID_TRG BEFORE 
+		INSERT ON %s
+		FOR EACH ROW 
+		WHEN(NEW.LOGID IS NULL) 
+		BEGIN 
+		:NEW.LOGID := %s_ID_SEQ.NEXTVAL;
+		END;`, tableName, tableName, tableName)
 }
 
 // создать представление с логами.
@@ -45,22 +68,6 @@ func oraCreateLogViewQuery(viewName string, tableName string) string {
 		DateTime as datetime, 
 		Text as text 
 		from %s`, viewName, tableName)
-}
-
-// создать последовательность для автоинкремента.
-func oraCreateSequenceQuery(tableName string) string {
-	return fmt.Sprintf("CREATE SEQUENCE %s_ID_SEQ START WITH 1 NOCACHE ORDER", tableName)
-}
-
-// создать триггер для автоинкремента.
-func oraCreateTriggerQuery(tableName string) string {
-	return fmt.Sprintf(`CREATE OR REPLACE TRIGGER %s_ID_TRG BEFORE 
-		INSERT ON %s
-		FOR EACH ROW 
-		WHEN(NEW.LOGID IS NULL) 
-		BEGIN 
-		:NEW.LOGID := %s_ID_SEQ.NEXTVAL;
-		END;`, tableName, tableName, tableName)
 }
 
 // текст запроса кол-ва строк в таблице tableName.
