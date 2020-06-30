@@ -684,8 +684,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			//AutoRemove:    true,
-			AutoRemove: false,
+			AutoRemove:    true,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -703,20 +702,16 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		logger.PrintfInfo("Запущен docker контейнер %s.", curContainerName)
 	}
 
-	//statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 
 	for {
 		select {
-		// case cntErr := <-errCh:
-		// 	if cntErr != nil {
-		// 		logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
-		// 	}
-		// case curStatus := <-statusCh:
-		// 	if curStatus.Error != nil {
-		// 		logger.PrintfErr("Получен статус docker контейнера %s. ОшибкаЖ %v. Код: %v.", curContainerName, curStatus.Error.Message, curStatus)
-		// 	} else {
-		// 		logger.PrintfErr("Получен статус docker контейнера %s. Код: %v.", curContainerName, curStatus)
-		// 	}
+		case cntErr := <-errCh:
+			if cntErr != nil {
+				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
+			}
+
+		case <-statusCh:
 
 		case <-killChan:
 			logger.PrintfInfo("Команда завершить docker контейнер %s.", curContainerName)

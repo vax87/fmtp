@@ -66,6 +66,12 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 
 // Work рабочий цикл
 func (cc *ChiefConfiguratorClient) Work() {
+
+	// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
+	if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
+		logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
+	}
+
 	for {
 		select {
 
@@ -209,11 +215,10 @@ func (cc *ChiefConfiguratorClient) initBeforeGetSettings() {
 func (cc *ChiefConfiguratorClient) initAfterGetSettings() {
 
 	if cc.withDocker {
-
 		// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
-		if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
-			logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
-		}
+		// if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
+		// 	logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
+		// }
 
 		if len(ChiefCfg.DockerRegistry) > 0 {
 			// выкачиваем docker образы из репозитория
