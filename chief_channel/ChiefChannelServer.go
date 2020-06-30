@@ -710,8 +710,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			if cntErr != nil {
 				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
 			}
-		case curStatus := <-statusCh:
-			logger.PrintfInfo("Получен статус docker контейнера %s. Ошибка: %v. Код: %v", curContainerName, curStatus.Error.Message, curStatus.StatusCode)
+		case <-statusCh:
 
 		case <-killChan:
 			logger.PrintfInfo("Команда завершить docker контейнер %s.", curContainerName)
