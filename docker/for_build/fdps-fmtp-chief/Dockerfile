@@ -1,4 +1,4 @@
-FROM busybox:glibc
+FROM oraclient
 
 LABEL maintainer="LEMZ"
 

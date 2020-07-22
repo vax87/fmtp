@@ -85,9 +85,12 @@ func (cc *ChiefConfiguratorClient) Work() {
 					switch msgHeader.Header {
 					// ответ на запрос настроек
 					case AnswerSettingsHeader:
+						ChiefCfg = chief_settings.ChiefSettings{CntrlID: -1, IPAddr: "", IsInitialised: false}
 						if unmErr = json.Unmarshal(postRes.result, &ChiefCfg); unmErr != nil {
 							logger.PrintfErr("Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: %s. Ошибка: %s.", string(postRes.result), unmErr.Error())
 						} else {
+							//logger.PrintfWarn("POST RESULT: %s", string(postRes.result))
+
 							logger.PrintfDebug("Получены настройки от конфигуратора. %+v.", ChiefCfg)
 
 							ChiefCfg.IsInitialised = true
@@ -160,6 +163,7 @@ func (cc *ChiefConfiguratorClient) Start() {
 // отправка POST сообщения конфигуратору и возврат ответа
 func (cc *ChiefConfiguratorClient) postToConfigurator(url string, msg interface{}) {
 	jsonValue, _ := json.Marshal(msg)
+	//logger.PrintfWarn("POST: %s", string(jsonValue))
 	resp, postErr := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
 	if postErr == nil {
 		defer resp.Body.Close()

@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [    
         {
-            "name": "fmtp_chief",
+            "name": "fmtp_chief_x64",
             "type": "go",
             "request": "launch",
             "mode": "auto",            
@@ -16,7 +16,7 @@
             }
         },
         {            
-            "name": "fmtp_channel",
+            "name": "fmtp_channel_x64",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -24,6 +24,29 @@
             "env": {
                 "GOOS": "windows",
                 "GOARC": "amd64"
+            },
+            "args": ["34532", "11", "W", "U", "OLDI", "channel", "13111"]
+        },
+        {
+            "name": "fmtp_chief_x32",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto", 
+            "program": "${workspaceFolder}/chief/fmtp_chief.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "386"
+            }
+        },
+        {            
+            "name": "fmtp_channel_x32",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/channel/fmtp_channel.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "386"
             },
             "args": ["34532", "11", "W", "U", "OLDI", "channel", "13111"]
         }

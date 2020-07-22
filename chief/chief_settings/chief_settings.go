@@ -53,3 +53,15 @@ func (s *ChiefSettings) SaveToFile() error {
 	}
 	return nil
 }
+
+// ProviderStatusById - статус (master|slave) провайдера по идентификатору
+func (s *ChiefSettings) ProviderStatusById(isProv int) (status string) {
+
+	return status
+}
+
+// ChannelDataTypeById - тип данных (OLDI|AODB) канала по идентификатору
+func (s *ChiefSettings) ChannelDataTypeById(isChan int) (dataType string) {
+
+	return dataType
+}

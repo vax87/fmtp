@@ -7,6 +7,7 @@ import (
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief/heartbeat"
 	"fdps/fmtp/chief/oldi"
+	"fdps/fmtp/chief/tky"
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
 	"sync"
@@ -40,6 +41,8 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 	go aodbCntrl.Work()
 	go oldiCntrl.Work()
 	go channelCntrl.Work()
+
+	go tky.Work()
 
 	for {
 		select {
@@ -80,6 +83,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		case curAodbState := <-aodbCntrl.ProviderStatesChan:
 			heartbeat.SetAodbProviderState(curAodbState)
 			chief_web.SetAodbProviderStates(curAodbState)
+			tky.SetAodbProviderStates(curAodbState)
 
 		// получены данные от провайдера OLDI
 		case oldiData := <-oldiCntrl.FromOldiDataChan:
@@ -93,6 +97,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		case curOldiState := <-oldiCntrl.ProviderStatesChan:
 			heartbeat.SetOldiProviderState(curOldiState)
 			chief_web.SetOldiProviderStates(curOldiState)
+			tky.SetOldiProviderState(curOldiState)
 
 		// сообщение о состоянии контроллера
 		case curMsg := <-heartbeat.HeartbeatCntrl.HeartbeatChannel:
@@ -102,6 +107,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		case curChannelStates := <-channelCntrl.ChannelStates:
 			heartbeat.SetChannelsState(curChannelStates)
 			chief_web.SetChannelStates(curChannelStates)
+			tky.SetChannelsState(curChannelStates)
 
 		// получено сообщение журнала
 		case curLogMsg := <-channelCntrl.LogChan:
