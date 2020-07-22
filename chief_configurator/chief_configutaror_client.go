@@ -91,9 +91,9 @@ func (cc *ChiefConfiguratorClient) Work() {
 						} else {
 							//logger.PrintfWarn("POST RESULT: %s", string(postRes.result))
 
+							ChiefCfg.IsInitialised = true
 							logger.PrintfDebug("Получены настройки от конфигуратора. %+v.", ChiefCfg)
 
-							ChiefCfg.IsInitialised = true
 							cc.readLocalSettingsTimer.Stop()
 
 							ChiefCfg.SaveToFile()

@@ -55,13 +55,21 @@ func (s *ChiefSettings) SaveToFile() error {
 }
 
 // ProviderStatusById - статус (master|slave) провайдера по идентификатору
-func (s *ChiefSettings) ProviderStatusById(isProv int) (status string) {
-
-	return status
+func (s *ChiefSettings) ProviderStatusById(idProv int) string {
+	for _, val := range s.ProvidersSetts {
+		if val.ID == idProv {
+			return val.Status
+		}
+	}
+	return ""
 }
 
 // ChannelDataTypeById - тип данных (OLDI|AODB) канала по идентификатору
-func (s *ChiefSettings) ChannelDataTypeById(isChan int) (dataType string) {
-
-	return dataType
+func (s *ChiefSettings) ChannelDataTypeById(idChan int) string {
+	for _, val := range s.ChannelSetts {
+		if val.Id == idChan {
+			return val.DataType
+		}
+	}
+	return ""
 }
