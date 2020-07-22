@@ -157,6 +157,7 @@ func (cc *ChiefConfiguratorClient) Start() {
 	chief_web.SetUrlConfig(cc.configUrls)
 
 	cc.initBeforeGetSettings()
+	logger.PrintfInfo("Собственные IP адреса: %v", utils.GetLocalIpv4List())
 	go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
 }
 
