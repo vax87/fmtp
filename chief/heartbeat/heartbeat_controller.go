@@ -109,7 +109,7 @@ func Work() {
 			HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateOk
 		CHSTL:
 			for _, it := range HeartbeatCntrl.curHeartbeatMsg.ChannelStates {
-				if it.FmtpState != channel_state.ChannelStateOk {
+				if it.DaemonState != channel_state.ChannelStateOk {
 					HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateError
 					break CHSTL
 				}
