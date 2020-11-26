@@ -44,7 +44,7 @@ deploy:
   script:
   
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/fdps"
-  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fmtp-channel sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME/channel/fdps/fmtp-channel
+  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fmtp_channel sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME/channel/fdps/fmtp_channel
   - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/channel && docker build -t fmtp-channel:${CHANNEL_RELEASE} . --no-cache"
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/image_tars && cd ~/docker/$CI_PROJECT_NAME/channel/image_tars && docker save -o fmtp-channel-${CHANNEL_RELEASE}.tar fmtp-channel:${CHANNEL_RELEASE}"
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/fdps && cd ~/docker/$CI_PROJECT_NAME/chief && if [ -f docker-compose.yml ]; then  docker-compose down;  fi"
