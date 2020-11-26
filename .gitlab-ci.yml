@@ -28,7 +28,7 @@ build:
   - cd  $SRC/utils
   - git checkout develop  
   - git pull
-  - cp -r docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
+  - cp -r $SRC/fmtp/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
   - cd  $SRC/fmtp/channel
