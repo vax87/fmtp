@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
 	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/chief_worker"
+	"fdps/fmtp/chief/version"
 
 	"fdps/utils"
 	"fdps/utils/logger"
@@ -33,7 +35,12 @@ func initLoggers() {
 	})
 	logger.AppendLogger(log_web.WebLogger)
 	utils.AppendHandler(log_web.WebLogger)
-	log_web.SetVersion(appVersion)
+
+	log_web.SetVersion(fmt.Sprintf("release[%s] commit[%s] build time[%s]",
+		version.Release,
+		version.Commit,
+		version.BuildTime),
+	)
 
 	// логгер с сохранением в файлы
 	// var ljackSetts log_ljack.LjackSettings

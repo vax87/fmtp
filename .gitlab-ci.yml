@@ -2,7 +2,8 @@ image: go_build:1.15
 
 variables:
   SRC: "/go/src/fdps"
-  RELEASE: "0.0.1"
+  CHIEF_RELEASE: "0.0.4"
+  CHANNEL_RELEASE: "0.0.2"
 
 before_script:
   - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
@@ -22,11 +23,11 @@ build:
   script: 
   - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/fmtp
   - git clone ssh://git@192.168.1.24:222/fdps/utils.git $SRC/utils
-  - cd  $SRC/fdps-cfp
+  - cd  $SRC/fmtp/chief
   - git checkout develop  
   - git pull 
   - cp -r docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
-  - go build -ldflags "-X fdps/fdps-cfp/version.Release=${RELEASE} -X fdps/fdps-cfp/version.Commit=$(git rev-parse --short HEAD) -X fdps/fdps-cfp/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/fdps .
+  - go build -ldflags "-X fdps/fmtp/chief/version.Release=${CHIEF_RELEASE} -X fdps/fmtp/chief/version.Commit=$(git rev-parse --short HEAD) -X fdps/fmtp/chief/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/fdps .
         
   artifacts:
     paths:
@@ -37,6 +38,6 @@ deploy:
   script:
   - ssh andrew@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME && cd ~/docker/$CI_PROJECT_NAME && if [ -f docker-compose.yml ]; then  docker-compose down;  fi"
   - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME andrew@192.168.1.24:/home/andrew/docker
-  - ssh andrew@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME && docker build -t fdps-cfp:${RELEASE} . --no-cache && docker-compose up -d"
-  - ssh andrew@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/image_tars && cd ~/docker/$CI_PROJECT_NAME/image_tars && docker save -o fdps-cfp-${RELEASE}.tar fdps-cfp:${RELEASE}"
+  - ssh andrew@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME && docker build -t fmtp-chief:${RELEASE} . --no-cache && docker-compose up -d"
+  - ssh andrew@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/image_tars && cd ~/docker/$CI_PROJECT_NAME/image_tars && docker save -o fmtp-chief-${RELEASE}.tar fmtp-chief:${RELEASE}"
   
