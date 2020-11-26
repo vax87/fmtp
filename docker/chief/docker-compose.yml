@@ -2,12 +2,12 @@ version: '2'
 
 services:
   fdps-parkings:
-   image: fmtp_chief:0.0.1
+   image: fmtp_chief:0.0.4
    container_name: fmtp_chief
    network_mode: "host"
    volumes:
-    - ./config:/fdps/config
-    - ./logs:/fdps/logs
+    - ./fdps/config:/fdps/config
+    - ./fdps/logs:/fdps/logs
     - /var/run/docker.sock:/var/run/docker.sock
    restart: always
    mem_limit: 256M
