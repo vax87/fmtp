@@ -49,7 +49,7 @@ deploy:
   - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/* sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME
   - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/channel && docker build -t fmtp_channel:${CHANNEL_RELEASE} . --no-cache"
   - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker-compose down"  
-  - ssh sasha@192.168.1.24 "docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
+  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/image_tars && cd ~/docker/$CI_PROJECT_NAME/channel/image_tars && docker save -o fmtp_channel-${CHANNEL_RELEASE}.tar fmtp_channel:${CHANNEL_RELEASE}"  
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/image_tars && cd ~/docker/$CI_PROJECT_NAME/chief/image_tars && docker save -o fmtp_chief-${CHIEF_RELEASE}.tar fmtp_chief:${CHIEF_RELEASE}"
   
