@@ -1,0 +1,10 @@
+Скрипты, необходимые для работы fmtp сервиса.
+
+1. Создание пользователя fmtp_log
+    Выполните от пользователя sys скрипт sysdba/create_fmtp_log-user.sql
+
+2. Создание таблиц и пакетов пользователя fmtp_log
+    Выполните от пользователя fmtp_log скрипт fmtp_log/create.sql	
+
+3. Разрешения пользователю fmtp_log для таблицы oldichannel в схеме fdps
+    Выполните от пользователя fdps скрипт fdps/fmtp_log_grant.sql.sql

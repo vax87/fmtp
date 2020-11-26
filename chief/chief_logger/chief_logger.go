@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/chief_logger/file"
 	"fdps/fmtp/chief/chief_logger/oracle"
@@ -14,19 +15,21 @@ import (
 
 // ChiefLogger логгер, отправляющего сообщения по таймеру сервису fmtp_logger
 type ChiefLogger struct {
-	SettsChan      chan common.LoggerSettings
-	FmtpLogChan    chan common.LogMessage
-	fileLogCntrl   *file.FileLoggerController     // контроллер записи в файлы
-	oracleLogCntrl *oracle.OracleLoggerController // контроллер записи в БД oracle
+	SettsChan         chan common.LoggerSettings
+	FmtpLogChan       chan common.LogMessage
+	ChannelStatesChan chan channel_state.ChannelState
+	fileLogCntrl      *file.FileLoggerController     // контроллер записи в файлы
+	oracleLogCntrl    *oracle.OracleLoggerController // контроллер записи в БД oracle
 }
 
 // NewChiefLogger - конструктор
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
-		SettsChan:      make(chan common.LoggerSettings, 1),
-		FmtpLogChan:    make(chan common.LogMessage, 10),
-		fileLogCntrl:   file.CreateFileLoggerController(),
-		oracleLogCntrl: oracle.NewOracleController(),
+		SettsChan:         make(chan common.LoggerSettings, 1),
+		FmtpLogChan:       make(chan common.LogMessage, 10),
+		ChannelStatesChan: make(chan channel_state.ChannelState, 100),
+		fileLogCntrl:      file.CreateFileLoggerController(),
+		oracleLogCntrl:    oracle.NewOracleController(),
 	}
 }
 
@@ -63,6 +66,9 @@ func (l *ChiefLogger) Work() {
 
 		case curMsg := <-l.FmtpLogChan:
 			l.processNewLogMsg(curMsg)
+
+		case channelState := <-l.ChannelStatesChan:
+			l.oracleLogCntrl.ChannelStatesChan <- channelState
 		}
 	}
 }

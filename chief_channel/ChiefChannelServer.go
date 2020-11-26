@@ -287,8 +287,8 @@ func (cc *ChiefChannelServer) Work() {
 
 			for {
 				if hasAcc {
-					curAccBytes := cc.dataFromOldi[startAccIdx : endAccIdx+len(endOldiAccTag)-startAccIdx]
-					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag)-startAccIdx:]...)
+					curAccBytes := make([]byte, 2*(endAccIdx+len(endOldiAccTag)-startAccIdx))
+					copy(curAccBytes, cc.dataFromOldi[startAccIdx:endAccIdx+len(endOldiAccTag)])
 
 					var oldiAcc fdps.FdpsOldiAcknowledge
 					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
@@ -297,6 +297,8 @@ func (cc *ChiefChannelServer) Work() {
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
 					}
+
+					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag):]...)
 
 					startAccIdx = strings.Index(string(cc.dataFromOldi), startOldiAccTag)
 					endAccIdx = strings.Index(string(cc.dataFromOldi), endOldiAccTag)
@@ -314,8 +316,8 @@ func (cc *ChiefChannelServer) Work() {
 			for {
 				if hasMsg {
 
-					curMsgBytes := cc.dataFromOldi[startMsgIdx : endMsgIdx+len(endOldiMsgTag)-startMsgIdx]
-					cc.dataFromOldi = append(cc.dataFromOldi[:startMsgIdx], cc.dataFromOldi[endMsgIdx+len(endOldiMsgTag)-startMsgIdx:]...)
+					curMsgBytes := make([]byte, endMsgIdx+len(endOldiMsgTag)-startMsgIdx)
+					copy(curMsgBytes, cc.dataFromOldi[startMsgIdx:endMsgIdx+len(endOldiMsgTag)])
 
 					var oldiPkg fdps.FdpsOldiPackage
 
@@ -324,9 +326,12 @@ func (cc *ChiefChannelServer) Work() {
 						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-								fdps.FdpsAodbService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
+								fdps.FdpsOldiService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
 						cc.ProcessOldiPacket(oldiPkg)
 					}
+
+					cc.dataFromOldi = append(cc.dataFromOldi[:startMsgIdx], cc.dataFromOldi[endMsgIdx+len(endOldiMsgTag)-startMsgIdx:]...)
+
 					startMsgIdx = strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
 					endMsgIdx = strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
 					hasMsg = (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)

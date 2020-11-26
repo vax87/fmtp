@@ -1,6 +1,7 @@
 package chief_worker
 
 import (
+	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/aodb"
 	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_web"
@@ -31,6 +32,8 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 
 	// контроллер FMTP каналов
 	var channelCntrl = chief_channel.NewChiefChannelServer(done, withDocker)
+
+	var channelStates []channel_state.ChannelState
 
 	chiefConfClient = chief_configurator.NewChiefClient(withDocker)
 
@@ -108,6 +111,28 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			heartbeat.SetChannelsState(curChannelStates)
 			chief_web.SetChannelStates(curChannelStates)
 			tky.SetChannelsState(curChannelStates)
+
+			for _, curVal := range curChannelStates {
+
+				foundState := false
+				for chIdx, chVal := range channelStates {
+					if chVal.LocalName == curVal.LocalName && chVal.RemoteName == curVal.RemoteName {
+
+						foundState = true
+
+						if chVal.DaemonState != curVal.DaemonState ||
+							chVal.FmtpState != curVal.FmtpState {
+
+							channelStates[chIdx] = curVal
+							chief_logger.ChiefLog.ChannelStatesChan <- curVal
+						}
+					}
+				}
+				if foundState == false {
+					channelStates = append(channelStates, curVal)
+					chief_logger.ChiefLog.ChannelStatesChan <- curVal
+				}
+			}
 
 		// получено сообщение журнала
 		case curLogMsg := <-channelCntrl.LogChan:

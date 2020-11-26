@@ -17,7 +17,7 @@ CREATE TABLE fmtp_online
 		FmtpType NVARCHAR2(15),
 		Direction NVARCHAR2(15),
 		DateTime NVARCHAR2(30) NOT NULL,
-		Text NVARCHAR2(500) NOT NULL,
+		Text NVARCHAR2(2000) NOT NULL,
 		CONSTRAINT fmtp_online_PK PRIMARY KEY(LogId));
 
 /
@@ -58,7 +58,7 @@ CREATE TABLE fmtp_storage
 		FmtpType NVARCHAR2(15),
 		Direction NVARCHAR2(15),
 		DateTime NVARCHAR2(30) NOT NULL,
-		Text NVARCHAR2(500) NOT NULL,
+		Text NVARCHAR2(2000) NOT NULL,
 		CONSTRAINT fmtp_storage_PK PRIMARY KEY(LogId));
 
 /
@@ -78,6 +78,7 @@ CREATE OR REPLACE TRIGGER fmtp_storage_ID_TRG BEFORE
 /
 COMMIT;
 /
+
 
 CREATE OR REPLACE VIEW fmtp_online_vw AS SELECT 
 		CntrlIP as cntrlip, 
@@ -115,18 +116,31 @@ CREATE OR REPLACE VIEW fmtp_storage_vw AS SELECT
 COMMIT;
 /
 
-CREATE OR REPLACE PACKAGE LOG_PROC_PKG AS
+create or replace PACKAGE LOG_PROC_PKG AS
+    
+    -- состояние канала
+    type channel_state is record
+    (
+		m_localname     nvarchar2(10)   := '',
+		m_remotename    nvarchar2(10)   := '',
+		m_workingstate  nvarchar2(10)   := '',
+        m_fmtpstate     nvarchar2(10)   := ''
+    );
+    
     --проверка кол-ва логов
     PROCEDURE CHECK_LOG_COUNT( MAX_ONLINE_LOG_COUNT IN NUMBER,	MAX_STORAGE_LOG_COUNT IN NUMBER	);
     --проверка времени хранения логов
     PROCEDURE CHECK_LOG_LIFETIME( OLDEST_STORAGE_LOG_DATE IN FMTP_STORAGE.DATETIME%TYPE);
+    --обновление состояния канала
+    procedure  channel_state_changed( chstate in channel_state );
 END;
+
 
 /
 COMMIT;
 /
 
-CREATE OR REPLACE PACKAGE BODY LOG_PROC_PKG AS
+create or replace PACKAGE BODY LOG_PROC_PKG AS
 	--проверка кол-ва логов
 	PROCEDURE CHECK_LOG_COUNT( MAX_ONLINE_LOG_COUNT IN NUMBER,	MAX_STORAGE_LOG_COUNT IN NUMBER	)
 	AS
@@ -146,13 +160,32 @@ CREATE OR REPLACE PACKAGE BODY LOG_PROC_PKG AS
 			DELETE FROM FMTP_STORAGE WHERE LOGID < (MIN_STORAGE_LOG_ID + CUR_STORAGE_LOG_COUNT - MAX_STORAGE_LOG_COUNT);
 		END IF;
 	END CHECK_LOG_COUNT;
+    
+    
    --проверка времени хранения логов 
    PROCEDURE CHECK_LOG_LIFETIME( OLDEST_STORAGE_LOG_DATE IN FMTP_STORAGE.DATETIME%TYPE)
    AS
    BEGIN
    	DELETE FROM FMTP_STORAGE WHERE DATETIME < OLDEST_STORAGE_LOG_DATE;
    END CHECK_LOG_LIFETIME;
+   
+   
+   
+    --обновление состояния канала
+    procedure  channel_state_changed( chstate in channel_state )
+    is        
+    begin            
+    
+        update fdps.oldichannel 
+            set fmtpstate = chstate.m_fmtpstate
+        where 
+            cid = chstate.m_remotename or
+            remoteid = chstate.m_remotename;
+            
+   end channel_state_changed;
 END;
+
+
 
 /
 COMMIT;
