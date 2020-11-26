@@ -1,0 +1,42 @@
+image: go_build:1.15
+
+variables:
+  SRC: "/go/src/fdps"
+  RELEASE: "0.0.1"
+
+before_script:
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+  - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/fdps
+  
+stages:
+  - build
+  - deploy
+  
+build:
+  stage: build
+  script: 
+  - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/fmtp
+  - git clone ssh://git@192.168.1.24:222/fdps/utils.git $SRC/utils
+  - cd  $SRC/fdps-cfp
+  - git checkout develop  
+  - git pull 
+  - cp -r docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
+  - go build -ldflags "-X fdps/fdps-cfp/version.Release=${RELEASE} -X fdps/fdps-cfp/version.Commit=$(git rev-parse --short HEAD) -X fdps/fdps-cfp/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/fdps .
+        
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/$CI_PROJECT_NAME/
+      
+deploy:
+  stage: deploy
+  script:
+  - ssh andrew@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME && cd ~/docker/$CI_PROJECT_NAME && if [ -f docker-compose.yml ]; then  docker-compose down;  fi"
+  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME andrew@192.168.1.24:/home/andrew/docker
+  - ssh andrew@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME && docker build -t fdps-cfp:${RELEASE} . --no-cache && docker-compose up -d"
+  - ssh andrew@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/image_tars && cd ~/docker/$CI_PROJECT_NAME/image_tars && docker save -o fdps-cfp-${RELEASE}.tar fdps-cfp:${RELEASE}"
+  
