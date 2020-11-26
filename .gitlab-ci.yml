@@ -12,8 +12,6 @@ before_script:
   - mkdir -p ~/.ssh
   - chmod 700 ~/.ssh
   - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-  - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel
-  - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief
   
 stages:
   - build
@@ -28,36 +26,29 @@ build:
   - git checkout develop  
   - git pull 
   - cp -r docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
+  - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
+  - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
   - cd  $SRC/fmtp/channel
-  - go build  -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel .
-  - cd $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel
-  - ls -al
+  - go build  -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fmtp_channel
+  - ls -al $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel
   - cd  $SRC/fmtp/chief
-  - go build -ldflags "-X fdps/fmtp/chief/version.Release=${CHIEF_RELEASE} -X fdps/fmtp/chief/version.Commit=$(git rev-parse --short HEAD) -X fdps/fmtp/chief/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief .
-  - cd $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief
-  - ls -al
+  - go build -ldflags "-X fdps/fmtp/chief/version.Release=${CHIEF_RELEASE} -X fdps/fmtp/chief/version.Commit=$(git rev-parse --short HEAD) -X fdps/fmtp/chief/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fmtp_chief
+  - ls -al $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief
  
         
   artifacts:
     paths:
-      - $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel
-      - $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief
+      - $CI_PROJECT_DIR/$CI_PROJECT_NAME
       
 deploy:
   stage: deploy
   script:
   
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/fdps"
-  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME/channel/fdps
-  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/channel && docker build -t fmtp-channel:${CHANNEL_RELEASE} . --no-cache"
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/image_tars && cd ~/docker/$CI_PROJECT_NAME/channel/image_tars && docker save -o fmtp-channel-${CHANNEL_RELEASE}.tar fmtp-channel:${CHANNEL_RELEASE}"
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/fdps && cd ~/docker/$CI_PROJECT_NAME/chief && if [ -f docker-compose.yml ]; then  docker-compose down;  fi"
-  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME/chief/fdps
-  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker build -t fmtp-chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/image_tars && cd ~/docker/$CI_PROJECT_NAME/chief/image_tars && docker save -o fmtp-chief-${CHIEF_RELEASE}.tar fmtp-chief:${CHIEF_RELEASE}"
-  
-  
-  
-  
-  
+  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME"
+  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME
+  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/channel && docker build -t fmtp_channel:${CHANNEL_RELEASE} . --no-cache"
+  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker-compose down"  
+  - ssh sasha@192.168.1.24 "docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
+  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/image_tars && cd ~/docker/$CI_PROJECT_NAME/channel/image_tars && docker save -o fmtp_channel-${CHANNEL_RELEASE}.tar fmtp_channel:${CHANNEL_RELEASE}"  
+  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/image_tars && cd ~/docker/$CI_PROJECT_NAME/chief/image_tars && docker save -o fmtp_chief-${CHIEF_RELEASE}.tar fmtp_chief:${CHIEF_RELEASE}"
   
