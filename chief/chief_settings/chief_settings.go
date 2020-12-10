@@ -61,7 +61,7 @@ func (s *ChiefSettings) ProviderStatusById(idProv int) string {
 			return val.Status
 		}
 	}
-	return ""
+	return "primary"
 }
 
 // ChannelDataTypeById - тип данных (OLDI|AODB) канала по идентификатору
@@ -71,5 +71,5 @@ func (s *ChiefSettings) ChannelDataTypeById(idChan int) string {
 			return val.DataType
 		}
 	}
-	return ""
+	return "OLDI"
 }
