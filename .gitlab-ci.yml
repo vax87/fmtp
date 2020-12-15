@@ -2,7 +2,7 @@ image: go_build:1.15
 
 variables:
   SRC: "/go/src/fdps"
-  CHIEF_RELEASE: "0.0.4"
+  CHIEF_RELEASE: "0.0.5"
   CHANNEL_RELEASE: "0.0.2"
 
 before_script:

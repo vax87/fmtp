@@ -529,11 +529,17 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 	for _, val := range cc.channelSetts.ChSettings {
 
-		//if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
 		// от OLDI только cid приходит
-		if val.DataType == fdps.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
-			channelID = val.Id
-			break
+		if pkg.LocalAtc == "" {
+			if val.DataType == fdps.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
+				channelID = val.Id
+				break
+			}
+		} else { // данные от провайдера тренажера (все RemoteAtc одинаковые, LocalAtc не пустой)
+			if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+				channelID = val.Id
+				break
+			}
 		}
 	}
 	accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
