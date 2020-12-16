@@ -228,10 +228,13 @@ func (cc *ChiefChannelServer) Work() {
 			if len(needToStopIds) > 0 {
 				cc.stopChannelsByIDs(needToStopIds)
 			}
-			// запускаем каналы FMTP
-			if len(needToStartIds) > 0 {
-				cc.startChannelsByIDs(needToStartIds)
-			}
+			// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+			time.AfterFunc(2*time.Second, func() {
+				// запускаем каналы FMTP
+				if len(needToStartIds) > 0 {
+					cc.startChannelsByIDs(needToStartIds)
+				}
+			})
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
