@@ -111,7 +111,7 @@ func (ftc *TcpTransportClient) startClient() {
 		ftc.connStateChan <- false
 		return
 	}
-	ftc.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Установлено TCP соединение FMTP канала.")
+	ftc.logMessageChan <- common.LogChannelST(common.SeverityDebug, "Установлено TCP соединение FMTP канала.")
 	ftc.connStateChan <- true
 
 	if err = ftc.tcpClient.(*net.TCPConn).SetKeepAlive(false); err != nil {

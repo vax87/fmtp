@@ -96,7 +96,7 @@ func Work() {
 	}
 
 	http.HandleFunc("/"+wsc.Path, tkyStateResponce)
-	logger.PrintfInfo("Запускаем HTTP сервер для связи с ТКУ. Порт: %d. Path: %s", wsc.Port, wsc.Path)
+	logger.PrintfDebug("Запускаем HTTP сервер для связи с ТКУ. Порт: %d. Path: %s", wsc.Port, wsc.Path)
 	go func() {
 		if err := tkyCntrl.ListenAndServe(); err != nil {
 			logger.PrintfErr("Ошибка запуска HTTP сервера для связи с ТКУ. Ошибка: %v", err)

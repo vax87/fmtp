@@ -76,7 +76,7 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 		return
 	} else {
 		c.tcpListenerWork = true
-		logger.PrintfInfo("Запущен TCP сервер для работы с OLDI провайдером. Порт: %d", localPort)
+		logger.PrintfDebug("Запущен TCP сервер для работы с OLDI провайдером. Порт: %d", localPort)
 		logger.SetDebugParam(srvStateKey, srvStateOkValue+" Порт: "+strconv.Itoa(localPort), logger.StateOkColor)
 		//defer tcpListener.Close()
 
@@ -97,7 +97,7 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 					}
 
 					remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
-					logger.PrintfInfo("Успешное подключение клиента к TCP серверу OLDI провайдера. "+
+					logger.PrintfDebug("Успешное подключение клиента к TCP серверу OLDI провайдера. "+
 						"Адрес подключенного клиента: %s", remoteAddr.IP.String())
 
 					go c.receiveLoop(curConn, c.providerClients[curConn])
@@ -126,7 +126,7 @@ func (c *OldiController) closeClient(conn net.Conn) {
 		conn.SetDeadline(time.Now().Add(time.Second))
 		// останавливаем передачу / прием
 		utils.ChanSafeClose(val.cancelWorkChan)
-		logger.PrintfErr("Отключен клиент OLDI провайдера. Адрес: %s", conn.RemoteAddr().String())
+		logger.PrintfDebug("Отключен клиент OLDI провайдера. Адрес: %s", conn.RemoteAddr().String())
 		delete(c.providerClients, conn)
 	}
 }

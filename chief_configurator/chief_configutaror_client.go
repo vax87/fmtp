@@ -67,9 +67,11 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 // Work рабочий цикл
 func (cc *ChiefConfiguratorClient) Work() {
 
-	// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
-	if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
-		logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
+	if cc.withDocker {
+		// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
+		if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
+			logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
+		}
 	}
 
 	for {
@@ -157,7 +159,7 @@ func (cc *ChiefConfiguratorClient) Start() {
 	chief_web.SetUrlConfig(cc.configUrls)
 
 	cc.initBeforeGetSettings()
-	logger.PrintfInfo("Собственные IP адреса: %v", utils.GetLocalIpv4List())
+	logger.PrintfDebug("Собственные IP адреса: %v", utils.GetLocalIpv4List())
 	go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
 }
 
@@ -203,7 +205,7 @@ func (cc *ChiefConfiguratorClient) initBeforeGetSettings() {
 			logger.PrintfErr("Ошибка получения списка версий приложения FMTP канал. Ошибка: %v", versErr)
 		} else {
 			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", cc.channelVersions), logger.StateDefaultColor)
-			logger.PrintfInfo("Получены версии приложения FMTP канал. Версии: %s.", cc.channelVersions)
+			logger.PrintfDebug("Получены версии приложения FMTP канал. Версии: %s.", cc.channelVersions)
 		}
 	} else {
 		if cc.channelVersions, versErr = utils.GetDockerImageVersions(ChannelImageName); versErr != nil {
@@ -211,7 +213,7 @@ func (cc *ChiefConfiguratorClient) initBeforeGetSettings() {
 				"Ошибка получения списка версий docker образов FMTP канал. Ошибка: %v", versErr)
 		} else {
 			logger.SetDebugParam(dbgChannelVersions, fmt.Sprintf("%v", cc.channelVersions), logger.StateDefaultColor)
-			logger.PrintfInfo("Получены версии doсker образов приложения FMTP канал. Версии: %s", cc.channelVersions)
+			logger.PrintfDebug("Получены версии doсker образов приложения FMTP канал. Версии: %s", cc.channelVersions)
 		}
 	}
 }

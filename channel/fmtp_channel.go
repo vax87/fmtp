@@ -112,7 +112,7 @@ func mainReturnWithCode() int {
 								fmt.Sprintf("Получены некорректные настройки. Настройки: <%s>. Ошибка: <%s>", channelSetts.ToLogMessage(), checkErr.Error()))
 
 						} else {
-							createLogMessage(common.SeverityInfo,
+							createLogMessage(common.SeverityDebug,
 								fmt.Sprintf("Получены настройки. Настройки: <%s>", channelSetts.ToLogMessage()))
 
 							go fmtpStateCntrl.Work(channelSetts)

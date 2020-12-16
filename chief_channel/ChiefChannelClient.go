@@ -70,11 +70,11 @@ func (c *Client) Work() {
 			if wsState == web_sock.ClientConnected {
 				web.SetChiefConn(true)
 				if c.sendSettingsRequest == false {
-					c.LogChan <- common.LogChannelST(common.SeverityInfo,
+					c.LogChan <- common.LogChannelST(common.SeverityDebug,
 						fmt.Sprintf("Запущен FMTP канал id = %d.", c.setts.ChannelID))
 
 					if dataToSend, err := json.Marshal(CreateSettingsRequestMsg(c.setts.ChannelID)); err == nil {
-						c.LogChan <- common.LogChannelST(common.SeverityInfo,
+						c.LogChan <- common.LogChannelST(common.SeverityDebug,
 							fmt.Sprintf("Запрос настроек от FMTP канала id = %d.", c.setts.ChannelID))
 
 						c.SendChan <- dataToSend
@@ -85,7 +85,7 @@ func (c *Client) Work() {
 				web.SetChiefConn(false)
 			}
 
-			c.LogChan <- common.LogChannelST(common.SeverityInfo,
+			c.LogChan <- common.LogChannelST(common.SeverityDebug,
 				fmt.Sprintf("Изменено состояние подключения FMTP канала в контроллеру. Id канала = %d. Состояние: %v", c.setts.ChannelID, wsState))
 
 		// ошибка WS

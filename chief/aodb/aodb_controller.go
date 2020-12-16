@@ -83,19 +83,19 @@ func (c *Controller) Work() {
 
 		// получен подключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntConnChan:
-			logger.PrintfInfo("Подключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("Подключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
 			//logger.SetDebugParam(srvLastConnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
 			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntDisconnChan:
-			logger.PrintfInfo("Отключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("Отключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
 			//logger.SetDebugParam(srvLastDisconnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
 			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отклоненный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntRejectChan:
-			logger.PrintfInfo("Отклонен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("Отклонен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
 
 		// получена ошибка от WS сервера
 		case wsErr := <-c.wsServer.ErrorChan:
@@ -110,7 +110,7 @@ func (c *Controller) Work() {
 		case connState := <-c.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: \"%s\".", c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath)
+				logger.PrintfDebug("Запускаем WS сервер для взаимодействия c AODB. Порт: %d Path: \"%s\".", c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath)
 				logger.SetDebugParam(srvStateKey, fmt.Sprintf("%s Порт: %d. Path: \"%s\"", srvStateOkValue, c.wsServerSetts.Port, utils.FmtpAodbWsUrlPath), logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)

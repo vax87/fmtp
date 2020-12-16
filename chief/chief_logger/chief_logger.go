@@ -77,12 +77,16 @@ func (l *ChiefLogger) Work() {
 func (l ChiefLogger) processNewLogMsg(logMsg common.LogMessage) {
 	logMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
 	l.fileLogCntrl.MessChan <- logMsg
-	l.oracleLogCntrl.MessChan <- logMsg
+
+	// по требованию Калининграда, чтоб отображались только вх, исх сообщения и ошибки
+	if logMsg.Severity == common.SeverityInfo || logMsg.Severity == common.SeverityWarning || logMsg.Severity == common.SeverityError {
+		l.oracleLogCntrl.MessChan <- logMsg
+	}
 }
 
 // Printf реализация интерфейса logger
 func (l ChiefLogger) Printf(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlST(common.SeverityDebug, fmt.Sprintf(format, a...)))
 }
 
 // PrintfDebug реализация интерфейса logger

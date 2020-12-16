@@ -245,7 +245,7 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg fdps.FdpsAodbPackage
 					unmErr = json.Unmarshal(incomeData, &dataMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
 								fdps.FdpsAodbService, dataMsg.Ident, dataMsg.LocalAtc, dataMsg.RemoteAtc, dataMsg.Text))
@@ -259,7 +259,7 @@ func (cc *ChiefChannelServer) Work() {
 					var accMsg fdps.FdpsAodbAcknowledge
 					unmErr = json.Unmarshal(incomeData, &accMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, accMsg.Ident))
 					} else {
@@ -293,7 +293,7 @@ func (cc *ChiefChannelServer) Work() {
 					var oldiAcc fdps.FdpsOldiAcknowledge
 					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
 
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
 					}
@@ -323,7 +323,7 @@ func (cc *ChiefChannelServer) Work() {
 
 					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
 
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 							fmtp.Operational.ToString(), common.DirectionIncoming,
 							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
 								fdps.FdpsOldiService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
@@ -417,7 +417,7 @@ func (cc *ChiefChannelServer) Work() {
 							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
 								cc.OutAodbPacketChan <- dataToSend
 
-								cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+								cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 									fmtp.Operational.ToString(), common.DirectionIncoming,
 									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
 										fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
@@ -437,7 +437,7 @@ func (cc *ChiefChannelServer) Work() {
 							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
 								cc.OutOldiPacketChan <- dataToSend
 
-								cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo,
+								cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
 									fmtp.Operational.ToString(), common.DirectionIncoming,
 									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
 										fdps.FdpsOldiService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
@@ -452,17 +452,17 @@ func (cc *ChiefChannelServer) Work() {
 
 		// получен подключенный клиент от WS сервера
 		case curClnt := <-cc.wsServer.ClntConnChan:
-			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Подключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Подключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
 			//userhub_web.ClientConn(userhub_web.FromWebSock(curClnt))
 
 		// получен отключенный клиент от WS сервера
 		case curClnt := <-cc.wsServer.ClntDisconnChan:
-			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Отключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Отключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
 			//userhub_web.ClientDisconn(userhub_web.FromWebSock(curClnt))
 
 		// получен отклоненный клиент от WS сервера
 		case curClnt := <-cc.wsServer.ClntRejectChan:
-			logger.PrintfInfo("WS сервер для взаимодействия с FMTP каналами. Отклонен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Отклонен клиент с адресом: %s.", curClnt.RemoteAddr().String())
 
 		// получена ошибка от WS сервера
 		case wsErr := <-cc.wsServer.ErrorChan:
@@ -472,7 +472,7 @@ func (cc *ChiefChannelServer) Work() {
 		case connState := <-cc.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
-				logger.PrintfInfo("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d. Path: \"%s\".", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
+				logger.PrintfDebug("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d. Path: \"%s\".", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
 				logger.SetDebugParam(srvStateKey, fmt.Sprintf("%s Порт: %d. Path: \"%s\"", srvStateOkValue, cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath), logger.StateOkColor)
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
@@ -519,7 +519,7 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 		cc.OutAodbPacketChan <- dataToSend
 	}
 
-	cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
+	cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug, common.NoneFmtpType, common.DirectionOutcoming,
 		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
 }
 
@@ -560,7 +560,7 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 	// отправка подтверждения
 	cc.OutOldiPacketChan <- accMsg.ToString()
 
-	cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
+	cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug, common.NoneFmtpType, common.DirectionOutcoming,
 		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
 }
 
@@ -621,7 +621,7 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 		return
 	}
 
-	logger.PrintfInfo("Запущено приложения FMTP канала. Исполняемый файл: %s. Иденификатор канала: %d.",
+	logger.PrintfDebug("Запущено приложения FMTP канала. Исполняемый файл: %s. Иденификатор канала: %d.",
 		channelFilePath, chSett.Id)
 
 	// канал, в который ошибка завершения отправкится
@@ -647,7 +647,7 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 		if err := cmd.Process.Kill(); err != nil {
 			logger.PrintfErr("Ошибка завершения выполнения приложения FMTP канала. Ошибка: %v.", err)
 		} else {
-			logger.PrintfInfo("Штатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d.",
+			logger.PrintfDebug("Штатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d.",
 				channelFilePath, chSett.Id)
 		}
 		time.Sleep(1 * time.Second)
@@ -699,13 +699,13 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	if crErr != nil {
 		logger.PrintfErr("Ошибка создания docker контейнера %s. Используемый образ: %s. Ошибка: %v.", curContainerName, imageName, crErr)
 	} else {
-		logger.PrintfInfo("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
+		logger.PrintfDebug("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		logger.PrintfErr("Ошибка запуска docker контейнера %s. Ошибка: %v.", curContainerName, err)
 	} else {
-		logger.PrintfInfo("Запущен docker контейнер %s.", curContainerName)
+		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
 	}
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -720,12 +720,12 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		case <-statusCh:
 
 		case <-killChan:
-			logger.PrintfInfo("Команда завершить docker контейнер %s.", curContainerName)
+			logger.PrintfDebug("Команда завершить docker контейнер %s.", curContainerName)
 
 			var stopDur time.Duration = 100 * time.Millisecond
 
 			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
-				logger.PrintfInfo("Остановлен docker контейнер %s.", curContainerName)
+				logger.PrintfDebug("Остановлен docker контейнер %s.", curContainerName)
 				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
 				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
 				// } else {

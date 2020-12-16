@@ -246,7 +246,7 @@ func (fsc *StateController) sendPacket(messageToSend fmtp.FmtpMessage, fmtpEvent
 
 	if (logSeverity == common.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != common.SeverityDebug {
 		fsc.LogMessageChan <- common.LogChannelSTDT(logSeverity, messageToSend.Type.ToString(), common.DirectionOutcoming,
-			fmt.Sprintf("Отправлено сообщение в FMTP канал. Текст: <%s>.", utfTextToLog))
+			fmt.Sprintf("Содержание: <%s>.", utfTextToLog))
 	}
 }
 
@@ -258,7 +258,7 @@ func (fsc *StateController) processEventMessage(curEvent fmtp.FmtpEvent, fmtpMsg
 		}
 
 		fsc.LogMessageChan <- common.LogChannelSTDT(logSeverity, fmtpMsg.Type.ToString(), common.DirectionIncoming,
-			fmt.Sprintf("Получено сообщение из FMTP канала. Текст: <%s>. Указание обработать событие <%s>",
+			fmt.Sprintf("Содержание: <%s>. Указание обработать событие <%s>",
 				fmtpMsg.Text, curEvent.ToString()))
 	}
 	fsc.forceNewEvent(curEvent)
@@ -270,7 +270,7 @@ func (fsc *StateController) processDataMessage(fmtpMsg fmtp.FmtpMessage) {
 	}
 
 	fsc.LogMessageChan <- common.LogChannelSTDT(common.SeverityInfo, fmtpMsg.Type.ToString(), common.DirectionIncoming,
-		fmt.Sprintf("Получено сообщение из FMTP канала. Текст: <%s>.",
+		fmt.Sprintf("Содержание: <%s>.",
 			fmtpMsg.Text))
 
 	fsc.FmtpDataReceiveChan <- fmtpMsg
