@@ -203,7 +203,11 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 		case string(fmtp.ShutdownMessage.Text):
 			fsc.processEventMessage(fmtp.RShutdown, fmtpMsg, common.SeverityInfo)
 		case string(fmtp.HeartbeatMessage.Text):
-			fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, common.SeverityDebug)
+			if fsc.curSet.LogDebug {
+				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, common.SeverityInfo)
+			} else {
+				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, common.SeverityDebug)
+			}
 		}
 	case fmtp.Operational:
 		fsc.processEventMessage(fmtp.RData, fmtpMsg, common.SeverityDebug)

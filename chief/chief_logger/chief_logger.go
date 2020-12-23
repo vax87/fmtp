@@ -86,27 +86,27 @@ func (l ChiefLogger) processNewLogMsg(logMsg common.LogMessage) {
 
 // Printf реализация интерфейса logger
 func (l ChiefLogger) Printf(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityDebug, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlSDT(common.SeverityDebug, common.DirectionUnknown, fmt.Sprintf(format, a...)))
 }
 
 // PrintfDebug реализация интерфейса logger
 func (l ChiefLogger) PrintfDebug(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityDebug, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlSDT(common.SeverityDebug, common.DirectionUnknown, fmt.Sprintf(format, a...)))
 }
 
 // PrintfInfo реализация интерфейса logger
 func (l ChiefLogger) PrintfInfo(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlSDT(common.SeverityInfo, common.DirectionUnknown, fmt.Sprintf(format, a...)))
 }
 
 // PrintfWarn реализация интерфейса logger
 func (l ChiefLogger) PrintfWarn(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityWarning, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlSDT(common.SeverityWarning, common.DirectionUnknown, fmt.Sprintf(format, a...)))
 }
 
 // PrintfErr реализация интерфейса logger
 func (l ChiefLogger) PrintfErr(format string, a ...interface{}) {
-	l.processNewLogMsg(common.LogCntrlST(common.SeverityError, fmt.Sprintf(format, a...)))
+	l.processNewLogMsg(common.LogCntrlSDT(common.SeverityError, common.DirectionUnknown, fmt.Sprintf(format, a...)))
 }
 
 // SetDebugParam задать параметр и его значение для отображение в таблице

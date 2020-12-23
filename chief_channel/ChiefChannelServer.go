@@ -248,35 +248,32 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg fdps.FdpsAodbPackage
 					unmErr = json.Unmarshal(incomeData, &dataMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-							fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-								fdps.FdpsAodbService, dataMsg.Ident, dataMsg.LocalAtc, dataMsg.RemoteAtc, dataMsg.Text))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text))
 						cc.ProcessAodbPacket(dataMsg)
 					} else {
-						logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
-							fdps.FdpsAodbService, string(incomeData), unmErr.Error())
+						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+							string(incomeData), unmErr.Error())
 					}
 
 				case fdps.FdpsAcknowledge:
 					var accMsg fdps.FdpsAodbAcknowledge
 					unmErr = json.Unmarshal(incomeData, &accMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-							fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsAodbService, accMsg.Ident))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident))
 					} else {
-						logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
-							fdps.FdpsAodbService, string(incomeData), unmErr.Error())
+						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+							string(incomeData), unmErr.Error())
 					}
 				default:
-					logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неизвестного формата, Текст: %s.",
-						fdps.FdpsAodbService, string(incomeData))
+					logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неизвестного формата, Текст: %s.",
+						string(incomeData))
 				}
 
 			} else {
-				logger.PrintfErr("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: %s. Ошибка: %s.",
-					fdps.FdpsAodbService, string(incomeData), unmErr.Error())
+				logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+					string(incomeData), unmErr.Error())
 			}
 
 		// получен новый пакет от провайдера OLDI
@@ -296,9 +293,8 @@ func (cc *ChiefChannelServer) Work() {
 					var oldiAcc fdps.FdpsOldiAcknowledge
 					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
 
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-							fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) ID: %s.", fdps.FdpsOldiService, oldiAcc.Id))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", oldiAcc.ToString()))
 					}
 
 					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag):]...)
@@ -326,10 +322,9 @@ func (cc *ChiefChannelServer) Work() {
 
 					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
 
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-							fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) ID: %s, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-								fdps.FdpsOldiService, oldiPkg.Id, oldiPkg.LocalAtc, oldiPkg.RemoteAtc, oldiPkg.Text))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text))
+
 						cc.ProcessOldiPacket(oldiPkg)
 					}
 
@@ -418,12 +413,10 @@ func (cc *ChiefChannelServer) Work() {
 							}
 
 							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-								cc.OutAodbPacketChan <- dataToSend
+								cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
 
-								cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-									fmtp.Operational.ToString(), common.DirectionIncoming,
-									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-										fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+								cc.OutAodbPacketChan <- dataToSend
 							}
 						} else if channelType == fdps.OLDIProvider {
 							var oldiDataMsg fdps.FdpsOldiPackage
@@ -438,12 +431,10 @@ func (cc *ChiefChannelServer) Work() {
 							}
 
 							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
-								cc.OutOldiPacketChan <- dataToSend
+								cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
 
-								cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug,
-									fmtp.Operational.ToString(), common.DirectionIncoming,
-									fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: %d, Лок. ATC: %s, Удал. ATC: %s, Текст: %s.",
-										fdps.FdpsOldiService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+								cc.OutOldiPacketChan <- dataToSend
 							}
 						}
 					}
@@ -522,8 +513,8 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 		cc.OutAodbPacketChan <- dataToSend
 	}
 
-	cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug, common.NoneFmtpType, common.DirectionOutcoming,
-		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
+	cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg))
 }
 
 // ProcessOldiPacket обработка пакета OLDI
@@ -563,8 +554,8 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 	// отправка подтверждения
 	cc.OutOldiPacketChan <- accMsg.ToString()
 
-	cc.LogChan <- common.LogCntrlSTDT(common.SeverityDebug, common.NoneFmtpType, common.DirectionOutcoming,
-		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: %+v.", fdps.AODBProvider, accMsg))
+	cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString()))
 }
 
 // останавливаем каналы с указанным ID

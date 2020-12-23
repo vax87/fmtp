@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// сообщение с использование ST (Severity-Text)
+// LogChannelST сообщение с использование ST (Severity-Text)
 func LogChannelST(severity string, text string) LogMessage {
 	return LogMessage{
 		Source:    SourceChannel,
@@ -15,7 +15,7 @@ func LogChannelST(severity string, text string) LogMessage {
 		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
 }
 
-// сообщение с использование STDT (Severity-Type-Direction-Text)
+// LogChannelSTDT сообщение с использование STDT (Severity-Type-Direction-Text)
 func LogChannelSTDT(severity string, fmtpType string, direction string, text string) LogMessage {
 	return LogMessage{
 		Source:    SourceChannel,
@@ -26,26 +26,15 @@ func LogChannelSTDT(severity string, fmtpType string, direction string, text str
 		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
 }
 
-// сообщение с использование ST (Severity-Text)
-func LogCntrlST(severity string, text string) LogMessage {
+// LogCntrlSDT сообщение с использование SDT (Severity-DataType-Text)
+func LogCntrlSDT(severity string, dtType string, text string) LogMessage {
 	return LogMessage{
 		ChannelId: NoChannelIdent,
-		Source:    SourceController,
-		Severity:  severity,
+		DataType:  dtType,
 		FmtpType:  NoneFmtpType,
-		Direction: DirectionUnknown,
-		Text:      text,
-		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
-}
-
-// сообщение с использование STDT (Severity-Type-Direction-Text)
-func LogCntrlSTDT(severity string, fmtpType string, direction string, text string) LogMessage {
-	return LogMessage{
-		ChannelId: NoChannelIdent,
 		Source:    SourceController,
 		Severity:  severity,
-		FmtpType:  fmtpType,
-		Direction: direction,
+		Direction: DirectionUnknown,
 		Text:      text,
 		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
 }
