@@ -1,9 +1,13 @@
 package channel_state
 
+import "time"
+
 const (
 	ChannelStateOk      = "ok"
 	ChannelStateStopped = "stopped"
 	ChannelStateError   = "error"
+
+	StateSendInterval = 1 * time.Second
 )
 
 type ChannelState struct {

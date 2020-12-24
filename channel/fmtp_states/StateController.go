@@ -49,7 +49,7 @@ func NewStateController() *StateController {
 	return &StateController{
 		currentState:        fmtp.Idle,
 		FmtpStateChan:       make(chan channel_state.ChannelState),
-		stateTick:           time.NewTicker(1 * time.Second),
+		stateTick:           time.NewTicker(channel_state.StateSendInterval),
 		LogMessageChan:      make(chan common.LogMessage, 100),
 		FmtpDataReceiveChan: make(chan fmtp.FmtpMessage, 1024),
 		FmtpDataSendChan:    make(chan fmtp.FmtpMessage, 1024),

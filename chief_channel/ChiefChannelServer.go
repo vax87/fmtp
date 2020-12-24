@@ -55,6 +55,7 @@ type ChiefChannelServer struct {
 	ChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для приема настроек каналов и порта для взаимодействия с каналами
 	channelSetts     channel_settings.ChannelSettingsWithPort      // текущие настройки каналов и орт для связи с каналами
 	ChannelStates    chan []channel_state.ChannelState             // канал для передачи состояний каналов
+	statesSendTicker *time.Ticker                                  // тикер отправки состояния каналов
 
 	IncomeAodbPacketChan chan []byte // канал для приема сообщений от провайдера AODB
 	OutAodbPacketChan    chan []byte // канал для отправки сообщений провайдеру AODB
@@ -92,6 +93,7 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 			ChPort:     0,
 		},
 		ChannelStates:        make(chan []channel_state.ChannelState, 10),
+		statesSendTicker:     time.NewTicker(time.Second),
 		IncomeAodbPacketChan: make(chan []byte, 1024),
 		OutAodbPacketChan:    make(chan []byte, 1024),
 		IncomeOldiPacketChan: make(chan []byte, 1024),
@@ -122,11 +124,6 @@ func (cc *ChiefChannelServer) Work() {
 
 			if cc.channelSetts.ChPort != newSetts.ChPort {
 				cc.wsServer.SettingsChan <- web_sock.WebSockServerSettings{Port: newSetts.ChPort}
-
-				// обнуляем состояния каналов
-				for key := range cc.chStates {
-					delete(cc.chStates, key)
-				}
 
 				//останавливаем и запускаем все каналы
 				for _, val := range cc.channelSetts.ChSettings {
@@ -209,33 +206,6 @@ func (cc *ChiefChannelServer) Work() {
 			for key := range cc.chStates {
 				delete(cc.chStates, key)
 			}
-
-			var chStateSlice []channel_state.ChannelState
-
-			for _, val := range cc.channelSetts.ChSettings {
-				var chWork string
-				if val.IsWorking {
-					chWork = channel_state.ChannelStateError
-				} else {
-					chWork = channel_state.ChannelStateStopped
-				}
-
-				curChannelState := channel_state.ChannelState{
-					ChannelID:   val.Id,
-					LocalName:   val.LocalATC,
-					RemoteName:  val.RemoteATC,
-					DaemonState: chWork,
-					FmtpState:   "disabled",
-					ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
-				}
-				cc.chStates[val.Id] = сhannelStateTime{ChannelState: curChannelState,
-					Time: time.Now()}
-
-				chStateSlice = append(chStateSlice, curChannelState)
-			}
-
-			// отправляем heartbeat контроллеру
-			cc.ChannelStates <- chStateSlice
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
@@ -378,13 +348,6 @@ func (cc *ChiefChannelServer) Work() {
 						cc.wsClients[curHbtMsg.ChannelID] = curWsPkg.Sock
 					}
 
-					// отправляем heartbeat контроллеру
-					var chStateSlice []channel_state.ChannelState
-					for key := range cc.chStates {
-						chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
-					}
-					cc.ChannelStates <- chStateSlice
-
 				case ChannelLogHeader:
 					var curLogMsg ChannelLogMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
@@ -445,6 +408,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 						}
 					}
+
 				}
 
 			} else {
@@ -478,6 +442,46 @@ func (cc *ChiefChannelServer) Work() {
 			case web_sock.ServerError:
 				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
 			}
+
+		case <-cc.statesSendTicker.C:
+
+			// удаляем из мэпки состояний старые состояния
+			for key, val := range cc.chStates {
+				if val.Time.Add(2 * channel_state.StateSendInterval).Before(time.Now()) {
+					delete(cc.chStates, key)
+				}
+			}
+
+			// если есть в настройках и нет в состояниях, добавляем значения по умолчанию
+			for _, val := range cc.channelSetts.ChSettings {
+
+				if _, ok := cc.chStates[val.Id]; !ok {
+					var chWork string
+					if val.IsWorking {
+						chWork = channel_state.ChannelStateError
+					} else {
+						chWork = channel_state.ChannelStateStopped
+					}
+
+					curChannelState := channel_state.ChannelState{
+						ChannelID:   val.Id,
+						LocalName:   val.LocalATC,
+						RemoteName:  val.RemoteATC,
+						DaemonState: chWork,
+						FmtpState:   "disabled",
+						ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
+					}
+					cc.chStates[val.Id] = сhannelStateTime{ChannelState: curChannelState,
+						Time: time.Now()}
+				}
+			}
+
+			// отправляем heartbeat контроллеру
+			var chStateSlice []channel_state.ChannelState
+			for key := range cc.chStates {
+				chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
+			}
+			cc.ChannelStates <- chStateSlice
 		}
 	}
 }
