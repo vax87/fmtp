@@ -371,6 +371,12 @@ func (cc *ChiefChannelServer) Work() {
 						cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
 					}
 
+					// если каналы были запущены на момент старта контроллера, то
+					// при получении Heartbeat проверяем клиентские сообщения
+					if _, ok := cc.wsClients[curHbtMsg.ChannelID]; !ok {
+						cc.wsClients[curHbtMsg.ChannelID] = curWsPkg.Sock
+					}
+
 					// отправляем heartbeat контроллеру
 					var chStateSlice []channel_state.ChannelState
 					for key := range cc.chStates {
@@ -546,6 +552,8 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
 				}
 			}
+		} else {
+			logger.PrintfErr("Не найдено WebSocket соединение канала для отправки сообщения.")
 		}
 	} else {
 		logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s.", pkg.RemoteAtc)
