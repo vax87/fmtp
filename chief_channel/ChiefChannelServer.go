@@ -142,10 +142,6 @@ func (cc *ChiefChannelServer) Work() {
 					}
 				}
 			} else if !reflect.DeepEqual(cc.channelSetts.ChSettings, newSetts.ChSettings) {
-				// обнуляем состояния каналов
-				for key := range cc.chStates {
-					delete(cc.chStates, key)
-				}
 
 				var oldIt, newIt channel_settings.ChannelSettings
 
@@ -197,6 +193,23 @@ func (cc *ChiefChannelServer) Work() {
 			cc.channelSetts.ChSettings = append([]channel_settings.ChannelSettings(nil), newSetts.ChSettings...)
 			cc.channelSetts.ChPort = newSetts.ChPort
 
+			// останавливаем каналы FMTP
+			if len(needToStopIds) > 0 {
+				cc.stopChannelsByIDs(needToStopIds)
+			}
+			// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+			time.AfterFunc(2*time.Second, func() {
+				// запускаем каналы FMTP
+				if len(needToStartIds) > 0 {
+					cc.startChannelsByIDs(needToStartIds)
+				}
+			})
+
+			// обнуляем состояния каналов
+			for key := range cc.chStates {
+				delete(cc.chStates, key)
+			}
+
 			var chStateSlice []channel_state.ChannelState
 
 			for _, val := range cc.channelSetts.ChSettings {
@@ -223,18 +236,6 @@ func (cc *ChiefChannelServer) Work() {
 
 			// отправляем heartbeat контроллеру
 			cc.ChannelStates <- chStateSlice
-
-			// останавливаем каналы FMTP
-			if len(needToStopIds) > 0 {
-				cc.stopChannelsByIDs(needToStopIds)
-			}
-			// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
-			time.AfterFunc(2*time.Second, func() {
-				// запускаем каналы FMTP
-				if len(needToStartIds) > 0 {
-					cc.startChannelsByIDs(needToStartIds)
-				}
-			})
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
