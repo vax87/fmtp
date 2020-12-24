@@ -6,6 +6,7 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief/version"
 	"fdps/fmtp/chief_configurator"
 )
 
@@ -82,7 +83,7 @@ func Work() {
 	// work вызывается после получения настроек каналов, поэтому ChiefCfg готов к использованию
 	HeartbeatCntrl.curHeartbeatMsg.CntrlID = chief_configurator.ChiefCfg.CntrlID
 	HeartbeatCntrl.curHeartbeatMsg.IPAddr = chief_configurator.ChiefCfg.IPAddr
-	HeartbeatCntrl.curHeartbeatMsg.ControllerVersion = "???"
+	HeartbeatCntrl.curHeartbeatMsg.ControllerVersion = version.Release
 	HeartbeatCntrl.curHeartbeatMsg.DockerVersion = "???"
 
 	HeartbeatCntrl.curHeartbeatMsg.LoggerState = common.LoggerState{
