@@ -697,7 +697,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    true,
+			AutoRemove:    false,
 		},
 		&network.NetworkingConfig{},
 		nil,
