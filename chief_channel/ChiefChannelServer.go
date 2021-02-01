@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -39,7 +40,7 @@ const (
 )
 
 // сведения об исполняемом файле канала
-type сhannelBin struct {
+type channelBin struct {
 	filePath string        // путь к исполняемому файлу
 	killChan chan struct{} // канал, исользуемый для завершения выполнения
 }
@@ -63,8 +64,9 @@ type ChiefChannelServer struct {
 	IncomeOldiPacketChan chan []byte // канал для приема сообщений от провайдера OLDI
 	OutOldiPacketChan    chan []byte // канал для отправки сообщений провайдеру OLDI
 
-	ChannelBinMap map[int]сhannelBin // ключ - идентификатор канала
-	killerChan    chan struct{}      // канал, по которому передается сигнал о завершение работы канала
+	ChannelBinMap *sync.Map // ключ - идентификатор каналаб значение типа сhannelBin
+
+	killerChan chan struct{} // канал, по которому передается сигнал о завершение работы канала
 
 	wsServer *web_sock.WebSockServer
 
@@ -99,7 +101,7 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 		IncomeOldiPacketChan: make(chan []byte, 1024),
 		OutOldiPacketChan:    make(chan []byte, 1024),
 		killerChan:           make(chan struct{}),
-		ChannelBinMap:        make(map[int]сhannelBin),
+		ChannelBinMap:        new(sync.Map),
 		wsServer:             web_sock.NewWebSockServer(done),
 		wsClients:            make(map[int]*websocket.Conn),
 		chStates:             make(map[int]сhannelStateTime),
@@ -113,7 +115,6 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 // Work реализация работы
 func (cc *ChiefChannelServer) Work() {
 	go cc.wsServer.Work("/" + utils.FmtpChannelWsUrlPath)
-	//cc.chiefChannelWS.SettChan <- chief_channel.ServerSettings{ChiefPort: cc.ChannelPort}
 
 	for {
 		select {
@@ -433,7 +434,7 @@ func (cc *ChiefChannelServer) Work() {
 		case wsErr := <-cc.wsServer.ErrorChan:
 			logger.PrintfErr("Возникла ошибка при работе WS сервера для взаимодействия с FMTP каналами. Ошибка: %s.", wsErr.Error())
 
-			// получено состояние работоспособности WS сервера для связи с AFTN каналами
+		// получено состояние работоспособности WS сервера для связи с FMTP каналами
 		case connState := <-cc.wsServer.StateChan:
 			switch connState {
 			case web_sock.ServerTryToStart:
@@ -445,35 +446,42 @@ func (cc *ChiefChannelServer) Work() {
 
 		case <-cc.statesSendTicker.C:
 
+			// если от канала нет сообщений состояния и он должен работать, то возможно он свалился
+			// плпытаемся запустить канал снова
+			var needToRestartIds []int // идентификаторы каналов, которые необходимо запустить
+
 			// удаляем из мэпки состояний старые состояния
 			for key, val := range cc.chStates {
-				if val.Time.Add(2 * channel_state.StateSendInterval).Before(time.Now()) {
+				if val.Time.Add(5 * channel_state.StateSendInterval).Before(time.Now()) {
 					delete(cc.chStates, key)
+
+					for _, val := range cc.channelSetts.ChSettings {
+						if val.Id == key && val.IsWorking {
+							needToRestartIds = append(needToRestartIds, key)
+
+							// добавляем состояние канала
+							cc.chStates[val.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
+								ChannelID:   val.Id,
+								LocalName:   val.LocalATC,
+								RemoteName:  val.RemoteATC,
+								DaemonState: channel_state.ChannelStateError,
+								FmtpState:   "disabled",
+								ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
+							},
+								Time: time.Now()}
+
+						}
+					}
 				}
 			}
 
-			// если есть в настройках и нет в состояниях, добавляем значения по умолчанию
-			for _, val := range cc.channelSetts.ChSettings {
+			if len(needToRestartIds) > 0 {
+				cc.stopChannelsByIDs(needToRestartIds)
 
-				if _, ok := cc.chStates[val.Id]; !ok {
-					var chWork string
-					if val.IsWorking {
-						chWork = channel_state.ChannelStateError
-					} else {
-						chWork = channel_state.ChannelStateStopped
-					}
-
-					curChannelState := channel_state.ChannelState{
-						ChannelID:   val.Id,
-						LocalName:   val.LocalATC,
-						RemoteName:  val.RemoteATC,
-						DaemonState: chWork,
-						FmtpState:   "disabled",
-						ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
-					}
-					cc.chStates[val.Id] = сhannelStateTime{ChannelState: curChannelState,
-						Time: time.Now()}
-				}
+				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+				time.AfterFunc(2*time.Second, func() {
+					cc.startChannelsByIDs(needToRestartIds)
+				})
 			}
 
 			// отправляем heartbeat контроллеру
@@ -573,34 +581,41 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
+	logger.PrintfErr("stopChannelsByIDs %v", idsToStop)
+
 STOPL:
 	for _, stopID := range idsToStop {
-		if channelBin, ok := cc.ChannelBinMap[stopID]; ok {
-			channelBin.killChan <- struct{}{}
+		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
+			val.(channelBin).killChan <- struct{}{}
 			<-cc.killerChan
 
 			if !cc.withDocker {
-				if err := utils.RemoveBinary(channelBin.filePath); err != nil {
+				if err := utils.RemoveBinary(val.(channelBin).filePath); err != nil {
 					logger.PrintfErr("%v", err)
 					continue STOPL
 				}
 			}
-			close(channelBin.killChan)
-			delete(cc.ChannelBinMap, stopID)
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(stopID)
 		}
 	}
 }
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
+	logger.PrintfErr("startChannelsByIDs %v", idsToStart)
+
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
 		for _, newIt := range cc.channelSetts.ChSettings {
 			if startID == newIt.Id {
 				if cc.withDocker {
-					cc.ChannelBinMap[startID] = сhannelBin{killChan: make(chan struct{})}
-					go cc.startChannelContainer(newIt, cc.ChannelBinMap[startID].killChan)
+					cc.ChannelBinMap.Store(startID, channelBin{killChan: make(chan struct{})})
+
+					if val, ok := cc.ChannelBinMap.Load(startID); ok {
+						go cc.startChannelContainer(newIt, val.(channelBin).killChan)
+					}
 
 				} else {
 					channelFilePath, err := utils.CopyBinary(newIt.Version, newIt.Id, newIt.LocalATC, newIt.RemoteATC)
@@ -608,8 +623,11 @@ STARTL:
 						logger.PrintfErr("%v", err)
 						continue STARTL
 					}
-					cc.ChannelBinMap[startID] = сhannelBin{filePath: channelFilePath, killChan: make(chan struct{})}
-					go cc.startChannelProcess(channelFilePath, newIt, cc.ChannelBinMap[startID])
+					cc.ChannelBinMap.Store(startID, channelBin{filePath: channelFilePath, killChan: make(chan struct{})})
+
+					if val, ok := cc.ChannelBinMap.Load(startID); ok {
+						go cc.startChannelProcess(channelFilePath, newIt, val.(channelBin))
+					}
 				}
 				break STARTL2
 			}
@@ -618,7 +636,7 @@ STARTL:
 }
 
 // запуск исполняемого файла fmtp канала
-func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett channel_settings.ChannelSettings, binInfo сhannelBin) {
+func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett channel_settings.ChannelSettings, binInfo channelBin) {
 	cmd := exec.Command(channelFilePath, strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
 		chSett.RemoteATC, chSett.DataType, chSett.URLPath, strconv.Itoa(chSett.URLPort))
 
@@ -642,6 +660,10 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 		if err != nil {
 			logger.PrintfErr("Нештатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d. Ошибка: %s.",
 				channelFilePath, chSett.Id, err.Error())
+
+			close(binInfo.killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+
 			if _, ok := cc.chStates[chSett.Id]; ok {
 				curState := cc.chStates[chSett.Id]
 				curState.ChannelState.DaemonState = channel_state.ChannelStateError

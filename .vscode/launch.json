@@ -25,7 +25,7 @@
                 "GOOS": "windows",
                 "GOARC": "amd64"
             },
-            "args": ["34532", "11", "W", "U", "OLDI", "channel", "13111"]
+            "args": ["34534", "10", "EYVL", "UMKK", "OLDI", "channel", "13110"]
         },
         {
             "name": "fmtp_chief_x32",
