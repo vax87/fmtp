@@ -581,8 +581,6 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
-	logger.PrintfErr("stopChannelsByIDs %v", idsToStop)
-
 STOPL:
 	for _, stopID := range idsToStop {
 		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
@@ -603,8 +601,6 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
-	logger.PrintfErr("startChannelsByIDs %v", idsToStart)
-
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:

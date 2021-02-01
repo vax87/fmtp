@@ -2,7 +2,7 @@ version: '2'
 
 services:
   fdps-parkings:
-   image: fmtp_chief:0.0.6
+   image: fmtp_chief:0.0.7
    container_name: fmtp_chief
    network_mode: "host"
    volumes:
