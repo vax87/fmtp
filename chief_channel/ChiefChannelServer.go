@@ -695,7 +695,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		cli.NegotiateAPIVersion(ctx)
 	}
 
-	curContainerName := "fmtp_channel_" + chSett.LocalATC + "_" + chSett.RemoteATC + "_" + strconv.Itoa(chSett.Id)
+	curContainerName := "fmtp_channel_" + chSett.LocalATC + "_" + chSett.RemoteATC + "_" + strconv.Itoa(chSett.Id) + "_" + time.Now().Format("15:04:05")
 	var imageName string
 
 	if len(chief_configurator.ChiefCfg.DockerRegistry) != 0 {
