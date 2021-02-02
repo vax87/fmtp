@@ -744,6 +744,12 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
 			}
 
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
+			return
+
 		case <-statusCh:
 
 		case <-killChan:
