@@ -135,7 +135,7 @@ func (cc *ChiefChannelServer) Work() {
 
 				//останавливаем и запускаем все каналы
 				for _, val := range newSetts.ChSettings {
-					if val.IsWorking {
+					if needStartChannel := cc.initChannelState(val); needStartChannel {
 						needToStartIds = append(needToStartIds, val.Id)
 					}
 				}
@@ -162,10 +162,12 @@ func (cc *ChiefChannelServer) Work() {
 							if newIt.IsWorking {
 								needToStartIds = append(needToStartIds, newIt.Id)
 							}
+							_ = cc.initChannelState(newIt)
 						}
 					} else { // есть в новых, нет в старых
 						if newIt.IsWorking {
 							needToStartIds = append(needToStartIds, newIt.Id)
+							_ = cc.initChannelState(newIt)
 						}
 					}
 				}
@@ -204,9 +206,9 @@ func (cc *ChiefChannelServer) Work() {
 			})
 
 			// обнуляем состояния каналов
-			for key := range cc.chStates {
-				delete(cc.chStates, key)
-			}
+			// for key := range cc.chStates {
+			// 	delete(cc.chStates, key)
+			// }
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
@@ -451,31 +453,27 @@ func (cc *ChiefChannelServer) Work() {
 			var needToRestartIds []int // идентификаторы каналов, которые необходимо запустить
 
 			// удаляем из мэпки состояний старые состояния
-			for key, val := range cc.chStates {
-				if val.Time.Add(5 * channel_state.StateSendInterval).Before(time.Now()) {
-					delete(cc.chStates, key)
+			for channelId, val := range cc.chStates {
+				if val.Time.Add(10 * channel_state.StateSendInterval).Before(time.Now()) {
+					delete(cc.chStates, channelId)
+					logger.PrintfErr("delete(cc.chStates, key) %v", channelId)
 
+					// если состояния удалили и в настройках канал должен быть запущен, то добавляем состояние
 					for _, val := range cc.channelSetts.ChSettings {
-						if val.Id == key && val.IsWorking {
-							needToRestartIds = append(needToRestartIds, key)
+						if _, ok := cc.chStates[val.Id]; !ok {
 
-							// добавляем состояние канала
-							cc.chStates[val.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
-								ChannelID:   val.Id,
-								LocalName:   val.LocalATC,
-								RemoteName:  val.RemoteATC,
-								DaemonState: channel_state.ChannelStateError,
-								FmtpState:   "disabled",
-								ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
-							},
-								Time: time.Now()}
-
+							if needRestartChannel := cc.initChannelState(val); needRestartChannel {
+								needToRestartIds = append(needToRestartIds, val.Id)
+							}
+							break
 						}
 					}
 				}
 			}
 
 			if len(needToRestartIds) > 0 {
+				logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
+
 				cc.stopChannelsByIDs(needToRestartIds)
 
 				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
@@ -581,6 +579,8 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
+	logger.PrintfErr("stopChannelsByIDs %v", idsToStop)
+
 STOPL:
 	for _, stopID := range idsToStop {
 		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
@@ -601,6 +601,8 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
+	logger.PrintfErr("startChannelsByIDs %v", idsToStart)
+
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
@@ -763,4 +765,28 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			return
 		}
 	}
+}
+
+func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSettings) (needStartChannel bool) {
+	var curChannelState string
+	if chSett.IsWorking {
+		needStartChannel = true
+		curChannelState = channel_state.ChannelStateError
+	} else {
+		needStartChannel = false
+		curChannelState = channel_state.ChannelStateStopped
+	}
+
+	// добавляем состояние канала
+	cc.chStates[chSett.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
+		ChannelID:   chSett.Id,
+		LocalName:   chSett.LocalATC,
+		RemoteName:  chSett.RemoteATC,
+		DaemonState: curChannelState,
+		FmtpState:   "disabled",
+		ChannelURL:  fmt.Sprintf("http://%s:%d/%s", chSett.URLAddress, chSett.URLPort, chSett.URLPath),
+	},
+		Time: time.Now()}
+
+	return needStartChannel
 }
