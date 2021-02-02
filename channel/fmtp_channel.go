@@ -159,6 +159,10 @@ func mainReturnWithCode() int {
 				chiefClient.SendChan <- dataToSend
 			}
 
+		// нет подключения к контроллеру в течинии минуты, завершаем приложение
+		case _ = <-chiefClient.CloseChan:
+			return chief_channel.FailToConnect
+
 		// получено текущее состояние канала
 		case curState := <-fmtpStateCntrl.FmtpStateChan:
 			web.SetChannelFMTPState(curState.FmtpState)

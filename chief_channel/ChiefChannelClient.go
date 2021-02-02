@@ -7,6 +7,7 @@ import (
 	"fdps/utils"
 	"fdps/utils/web_sock"
 	"fmt"
+	"time"
 )
 
 // ClientSettings настройки клиента контроллера каналов
@@ -27,6 +28,10 @@ type Client struct {
 	setts               ClientSettings // текущие настройки канала
 	ws                  *web_sock.WebSockClient
 	sendSettingsRequest bool // был отправлен запрос настроек. При потере связи с сконтроллером и ее восстановлении настройки не перезапрашиваются
+	lastConnectTime     time.Time
+	startTime           time.Time
+
+	CloseChan chan struct{}
 }
 
 // NewChiefChannelClient конструктор
@@ -37,6 +42,8 @@ func NewChiefChannelClient(done chan struct{}) *Client {
 		SendChan:    make(chan []byte, 1024),
 		SettChan:    make(chan ClientSettings),
 		ws:          web_sock.NewWebSockClient(done),
+		startTime:   time.Now(),
+		CloseChan:   make(chan struct{}),
 	}
 }
 
@@ -67,7 +74,11 @@ func (c *Client) Work() {
 
 		// изменено сотсояние подключения
 		case wsState := <-c.ws.StateChan:
+			var connStateStr string
+
 			if wsState == web_sock.ClientConnected {
+				c.lastConnectTime = time.Now()
+
 				web.SetChiefConn(true)
 				if c.sendSettingsRequest == false {
 					c.LogChan <- common.LogChannelST(common.SeverityDebug,
@@ -81,12 +92,25 @@ func (c *Client) Work() {
 						c.sendSettingsRequest = true
 					}
 				}
+				connStateStr = "Подключен"
 			} else if wsState == web_sock.ClientDisconnected {
 				web.SetChiefConn(false)
+				connStateStr = "Не подключен"
+
+				// не было подключения к серверу
+				if c.lastConnectTime.IsZero() {
+					if c.startTime.Add(time.Minute).Before(time.Now()) {
+						c.CloseChan <- struct{}{}
+					}
+				} else {
+					if c.lastConnectTime.Add(time.Minute).Before(time.Now()) {
+						c.CloseChan <- struct{}{}
+					}
+				}
 			}
 
 			c.LogChan <- common.LogChannelST(common.SeverityDebug,
-				fmt.Sprintf("Изменено состояние подключения FMTP канала в контроллеру. Id канала = %d. Состояние: %v", c.setts.ChannelID, wsState))
+				fmt.Sprintf("Изменено состояние подключения FMTP канала в контроллеру. Id канала = %d. Состояние: %s", c.setts.ChannelID, connStateStr))
 
 		// ошибка WS
 		case wsErr := <-c.ws.ErrorChan:
