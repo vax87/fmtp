@@ -7,7 +7,6 @@ import (
 	"fdps/utils"
 	"fdps/utils/web_sock"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -28,11 +27,9 @@ type Client struct {
 	SettChan            chan ClientSettings
 	setts               ClientSettings // текущие настройки канала
 	ws                  *web_sock.WebSockClient
-	sendSettingsRequest bool // был отправлен запрос настроек. При потере связи с сконтроллером и ее восстановлении настройки не перезапрашиваются
-	lastConnectTime     time.Time
-	startTime           time.Time
-
-	CloseChan chan struct{}
+	sendSettingsRequest bool      // был отправлен запрос настроек. При потере связи с сконтроллером и ее восстановлении настройки не перезапрашиваются
+	disconnTime         time.Time // время дисконнекта
+	CloseChan           chan struct{}
 }
 
 // NewChiefChannelClient конструктор
@@ -43,7 +40,6 @@ func NewChiefChannelClient(done chan struct{}) *Client {
 		SendChan:    make(chan []byte, 1024),
 		SettChan:    make(chan ClientSettings),
 		ws:          web_sock.NewWebSockClient(done),
-		startTime:   time.Now(),
 		CloseChan:   make(chan struct{}),
 	}
 }
@@ -78,7 +74,8 @@ func (c *Client) Work() {
 			var connStateStr string
 
 			if wsState == web_sock.ClientConnected {
-				c.lastConnectTime = time.Now()
+
+				c.disconnTime = time.Time{}
 
 				web.SetChiefConn(true)
 				if c.sendSettingsRequest == false {
@@ -99,14 +96,10 @@ func (c *Client) Work() {
 				connStateStr = "Не подключен"
 
 				// не было подключения к серверу
-				if c.lastConnectTime.IsZero() {
-					if c.startTime.Add(time.Minute).Before(time.Now()) {
-						log.Println("c.lastConnectTime.IsZero()")
-						c.CloseChan <- struct{}{}
-					}
+				if c.disconnTime.IsZero() {
+					c.disconnTime = time.Now()
 				} else {
-					if c.lastConnectTime.Add(time.Minute).Before(time.Now()) {
-						log.Println("c.lastConnectTime.Add(time.Minute).Before(time.Now())")
+					if c.disconnTime.Add(time.Minute).Before(time.Now()) {
 						c.CloseChan <- struct{}{}
 					}
 				}

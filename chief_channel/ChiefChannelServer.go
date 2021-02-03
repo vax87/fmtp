@@ -41,8 +41,9 @@ const (
 
 // сведения об исполняемом файле канала
 type channelBin struct {
-	filePath string        // путь к исполняемому файлу
-	killChan chan struct{} // канал, исользуемый для завершения выполнения
+	filePath     string        // путь к исполняемому файлу
+	killChan     chan struct{} // канал, исользуемый для завершения выполнения
+	startPerform bool          // выполнене запуск канала
 }
 
 // состояния каналов FMTP с отметкой времени
@@ -471,15 +472,17 @@ func (cc *ChiefChannelServer) Work() {
 				}
 			}
 
-			if len(needToRestartIds) > 0 {
-				logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
+			if cc.allStartPerform() {
+				if len(needToRestartIds) > 0 {
+					logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
 
-				//cc.stopChannelsByIDs(needToRestartIds)
+					//cc.stopChannelsByIDs(needToRestartIds)
 
-				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
-				// time.AfterFunc(2*time.Second, func() {
-				// 	cc.startChannelsByIDs(needToRestartIds)
-				// })
+					// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+					time.AfterFunc(2*time.Second, func() {
+						cc.startChannelsByIDs(needToRestartIds)
+					})
+				}
 			}
 
 			// отправляем heartbeat контроллеру
@@ -612,9 +615,7 @@ STARTL:
 					cc.ChannelBinMap.Store(startID, channelBin{killChan: make(chan struct{})})
 
 					if val, ok := cc.ChannelBinMap.Load(startID); ok {
-						go cc.startChannelContainer(newIt, val.(channelBin).killChan)
-					} else {
-						logger.PrintfErr("NO CHANNEL ID IN BinMap")
+						go cc.startChannelContainer(newIt, val.(channelBin))
 					}
 
 				} else {
@@ -686,12 +687,13 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 }
 
 // запуск docker контейнера fmtp канала
-func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.ChannelSettings, killChan chan struct{}) {
+func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.ChannelSettings, binInfo channelBin) {
 	ctx := context.Background()
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.PrintfErr("Ошибка создания клиента сервиса docker. Ошибка: %v", err)
+		return
 	} else {
 		defer cli.Close()
 		cli.NegotiateAPIVersion(ctx)
@@ -727,14 +729,22 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 	if crErr != nil {
 		logger.PrintfErr("Ошибка создания docker контейнера %s. Используемый образ: %s. Ошибка: %v.", curContainerName, imageName, crErr)
+		return
 	} else {
 		logger.PrintfDebug("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		logger.PrintfErr("Ошибка запуска docker контейнера %s. Ошибка: %v.", curContainerName, err)
+		return
 	} else {
 		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
+
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			newVal := val.(channelBin)
+			newVal.startPerform = true
+			cc.ChannelBinMap.Store(chSett.Id, newVal)
+		}
 	}
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -754,19 +764,19 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 		case <-statusCh:
 
-		case <-killChan:
+		case <-binInfo.killChan:
 			logger.PrintfDebug("Команда завершить docker контейнер %s.", curContainerName)
 
-			var stopDur time.Duration = 100 * time.Millisecond
+			//var stopDur time.Duration = 100 * time.Millisecond
 
-			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
+			if stopErr := cli.ContainerStop(ctx, resp.ID, nil); stopErr == nil {
 				logger.PrintfDebug("Остановлен docker контейнер %s.", curContainerName)
 
-				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
-				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
-				// } else {
-				// 	logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
-				// }
+				if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
+					logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
+				} else {
+					logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
+				}
 			} else {
 				logger.PrintfErr("Ошибка остановки docker контейнера %s. Ошибка %v", curContainerName, stopErr)
 			}
@@ -798,4 +808,17 @@ func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSe
 		Time: time.Now()}
 
 	return needStartChannel
+}
+
+func (cc *ChiefChannelServer) allStartPerform() bool {
+	for _, val := range cc.channelSetts.ChSettings {
+		if val.IsWorking {
+			if bin, ok := cc.ChannelBinMap.Load(val.Id); ok {
+				if !bin.(channelBin).startPerform {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

@@ -172,18 +172,20 @@ func (fts *TcpTransportServer) receiveLoop() {
 			return
 		// прием данных
 		default:
-			buffer := make([]byte, 8192)
-			if readBytes, err := fts.tcpClient.Read(buffer); err != nil {
-				if err != io.EOF {
-					fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
-						fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
+			if fts.tcpClient != nil {
+				buffer := make([]byte, 8192)
+				if readBytes, err := fts.tcpClient.Read(buffer); err != nil {
+					if err != io.EOF {
+						fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+							fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
+					}
+					fts.errorChan <- err
+					//fts.stopClient()
+					return
+				} else {
+					fmt.Println("Read bytes", readBytes)
+					fts.receivedDataChan <- buffer[:readBytes]
 				}
-				fts.errorChan <- err
-				//fts.stopClient()
-				return
-			} else {
-				fmt.Println("Read bytes", readBytes)
-				fts.receivedDataChan <- buffer[:readBytes]
 			}
 		}
 	}
