@@ -49,7 +49,7 @@ type FdpsOldiPackage struct {
 
 // FdpsOldiAcknowledge - подтверждение получения данных
 type FdpsOldiAcknowledge struct {
-	Id int
+	Id int `xml:"acc"`
 }
 
 func (acc *FdpsOldiAcknowledge) ToString() []byte {
