@@ -7,6 +7,7 @@ import (
 	"fdps/utils"
 	"fdps/utils/web_sock"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -100,10 +101,12 @@ func (c *Client) Work() {
 				// не было подключения к серверу
 				if c.lastConnectTime.IsZero() {
 					if c.startTime.Add(time.Minute).Before(time.Now()) {
+						log.Println("c.lastConnectTime.IsZero()")
 						c.CloseChan <- struct{}{}
 					}
 				} else {
 					if c.lastConnectTime.Add(time.Minute).Before(time.Now()) {
+						log.Println("c.lastConnectTime.Add(time.Minute).Before(time.Now())")
 						c.CloseChan <- struct{}{}
 					}
 				}

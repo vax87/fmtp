@@ -474,12 +474,12 @@ func (cc *ChiefChannelServer) Work() {
 			if len(needToRestartIds) > 0 {
 				logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
 
-				cc.stopChannelsByIDs(needToRestartIds)
+				//cc.stopChannelsByIDs(needToRestartIds)
 
 				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
-				time.AfterFunc(2*time.Second, func() {
-					cc.startChannelsByIDs(needToRestartIds)
-				})
+				// time.AfterFunc(2*time.Second, func() {
+				// 	cc.startChannelsByIDs(needToRestartIds)
+				// })
 			}
 
 			// отправляем heartbeat контроллеру
