@@ -613,6 +613,8 @@ STARTL:
 
 					if val, ok := cc.ChannelBinMap.Load(startID); ok {
 						go cc.startChannelContainer(newIt, val.(channelBin).killChan)
+					} else {
+						logger.PrintfErr("NO CHANNEL ID IN BinMap")
 					}
 
 				} else {
@@ -717,7 +719,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    true,
+			AutoRemove:    false,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -759,6 +761,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
 				logger.PrintfDebug("Остановлен docker контейнер %s.", curContainerName)
+
 				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
 				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
 				// } else {
