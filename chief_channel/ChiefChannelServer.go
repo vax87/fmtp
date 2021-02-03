@@ -41,9 +41,9 @@ const (
 
 // сведения об исполняемом файле канала
 type channelBin struct {
-	filePath     string        // путь к исполняемому файлу
-	killChan     chan struct{} // канал, исользуемый для завершения выполнения
-	startPerform bool          // выполнене запуск канала
+	filePath string        // путь к исполняемому файлу
+	killChan chan struct{} // канал, исользуемый для завершения выполнения
+	//startPerform bool          // выполнене запуск канала
 }
 
 // состояния каналов FMTP с отметкой времени
@@ -472,18 +472,18 @@ func (cc *ChiefChannelServer) Work() {
 				}
 			}
 
-			if cc.allStartPerform() {
-				if len(needToRestartIds) > 0 {
-					logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
+			// if cc.allStartPerform() {
+			// 	if len(needToRestartIds) > 0 {
+			// 		logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
 
-					//cc.stopChannelsByIDs(needToRestartIds)
+			// 		//cc.stopChannelsByIDs(needToRestartIds)
 
-					// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
-					time.AfterFunc(2*time.Second, func() {
-						cc.startChannelsByIDs(needToRestartIds)
-					})
-				}
-			}
+			// 		// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+			// 		time.AfterFunc(2*time.Second, func() {
+			// 			cc.startChannelsByIDs(needToRestartIds)
+			// 		})
+			// 	}
+			// }
 
 			// отправляем heartbeat контроллеру
 			var chStateSlice []channel_state.ChannelState
@@ -721,7 +721,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    false,
+			AutoRemove:    true,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -740,11 +740,11 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	} else {
 		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
 
-		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
-			newVal := val.(channelBin)
-			newVal.startPerform = true
-			cc.ChannelBinMap.Store(chSett.Id, newVal)
-		}
+		// if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+		// 	newVal := val.(channelBin)
+		// 	newVal.startPerform = true
+		// 	cc.ChannelBinMap.Store(chSett.Id, newVal)
+		// }
 	}
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -772,11 +772,11 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			if stopErr := cli.ContainerStop(ctx, resp.ID, nil); stopErr == nil {
 				logger.PrintfDebug("Остановлен docker контейнер %s.", curContainerName)
 
-				if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
-					logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
-				} else {
-					logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
-				}
+				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
+				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
+				// } else {
+				// 	logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
+				// }
 			} else {
 				logger.PrintfErr("Ошибка остановки docker контейнера %s. Ошибка %v", curContainerName, stopErr)
 			}
@@ -810,15 +810,15 @@ func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSe
 	return needStartChannel
 }
 
-func (cc *ChiefChannelServer) allStartPerform() bool {
-	for _, val := range cc.channelSetts.ChSettings {
-		if val.IsWorking {
-			if bin, ok := cc.ChannelBinMap.Load(val.Id); ok {
-				if !bin.(channelBin).startPerform {
-					return false
-				}
-			}
-		}
-	}
-	return true
-}
+// func (cc *ChiefChannelServer) allStartPerform() bool {
+// 	for _, val := range cc.channelSetts.ChSettings {
+// 		if val.IsWorking {
+// 			if bin, ok := cc.ChannelBinMap.Load(val.Id); ok {
+// 				if !bin.(channelBin).startPerform {
+// 					return false
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return true
+// }
