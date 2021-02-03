@@ -269,7 +269,8 @@ func (cc *ChiefChannelServer) Work() {
 					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
 
 						cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", oldiAcc.ToString()))
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes)))
+						//fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", oldiAcc.ToString()))
 					}
 
 					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag):]...)
