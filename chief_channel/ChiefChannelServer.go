@@ -450,14 +450,14 @@ func (cc *ChiefChannelServer) Work() {
 		case <-cc.statesSendTicker.C:
 
 			// если от канала нет сообщений состояния и он должен работать, то возможно он свалился
-			// плпытаемся запустить канал снова
+			// пытаемся запустить канал снова
 			var needToRestartIds []int // идентификаторы каналов, которые необходимо запустить
 
 			// удаляем из мэпки состояний старые состояния
 			for channelId, val := range cc.chStates {
 				if val.Time.Add(10 * channel_state.StateSendInterval).Before(time.Now()) {
 					delete(cc.chStates, channelId)
-					logger.PrintfErr("delete(cc.chStates, key) %v", channelId)
+					// logger.PrintfErr("delete(cc.chStates, key) %v", channelId)
 
 					// если состояния удалили и в настройках канал должен быть запущен, то добавляем состояние
 					for _, val := range cc.channelSetts.ChSettings {
@@ -582,8 +582,6 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
-	logger.PrintfErr("stopChannelsByIDs %v", idsToStop)
-
 STOPL:
 	for _, stopID := range idsToStop {
 		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
@@ -604,8 +602,6 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
-	logger.PrintfErr("startChannelsByIDs %v", idsToStart)
-
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
@@ -721,7 +717,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    true,
+			AutoRemove:    false,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -739,12 +735,6 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		return
 	} else {
 		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
-
-		// if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
-		// 	newVal := val.(channelBin)
-		// 	newVal.startPerform = true
-		// 	cc.ChannelBinMap.Store(chSett.Id, newVal)
-		// }
 	}
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -809,16 +799,3 @@ func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSe
 
 	return needStartChannel
 }
-
-// func (cc *ChiefChannelServer) allStartPerform() bool {
-// 	for _, val := range cc.channelSetts.ChSettings {
-// 		if val.IsWorking {
-// 			if bin, ok := cc.ChannelBinMap.Load(val.Id); ok {
-// 				if !bin.(channelBin).startPerform {
-// 					return false
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return true
-// }
