@@ -783,7 +783,7 @@ func (cc *ChiefChannelServer) checkChannelWorking() {
 
 	for _, setts := range cc.channelSetts.ChSettings {
 		if setts.IsWorking {
-			if _, ok := cc.ChannelBinMap.Load(setts.lId); !ok {
+			if _, ok := cc.ChannelBinMap.Load(setts.Id); !ok {
 				logger.PrintfErr("need restart channel")
 			}
 			break
