@@ -556,7 +556,6 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
-	logger.PrintfWarn("stopChannelsByIDs %v", idsToStop)
 STOPL:
 	for _, stopID := range idsToStop {
 		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
@@ -577,7 +576,6 @@ STOPL:
 
 // запускаем каналы с указанным ID
 func (cc *ChiefChannelServer) startChannelsByIDs(idsToStart []int) {
-	logger.PrintfWarn("startChannelsByIDs %v", idsToStart)
 STARTL:
 	for _, startID := range idsToStart {
 	STARTL2:
@@ -634,8 +632,10 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 			logger.PrintfErr("Нештатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d. Ошибка: %s.",
 				channelFilePath, chSett.Id, err.Error())
 
-			close(binInfo.killChan)
-			cc.ChannelBinMap.Delete(chSett.Id)
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
 
 			if _, ok := cc.chStates[chSett.Id]; ok {
 				curState := cc.chStates[chSett.Id]
@@ -643,6 +643,7 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 				cc.chStates[chSett.Id] = curState
 			}
 		}
+		cc.checkChannelWorking(chSett.Id)
 		return
 
 	case <-binInfo.killChan:
@@ -665,6 +666,10 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.PrintfErr("Ошибка создания клиента сервиса docker. Ошибка: %v", err)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+		}
 		return
 	} else {
 		defer cli.Close()
@@ -693,7 +698,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			},
 			NetworkMode:   "host",
 			RestartPolicy: container.RestartPolicy{Name: "no"},
-			AutoRemove:    false,
+			AutoRemove:    true,
 		},
 		&network.NetworkingConfig{},
 		nil,
@@ -701,6 +706,10 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 	if crErr != nil {
 		logger.PrintfErr("Ошибка создания docker контейнера %s. Используемый образ: %s. Ошибка: %v.", curContainerName, imageName, crErr)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+		}
 		return
 	} else {
 		logger.PrintfDebug("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
@@ -708,6 +717,10 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		logger.PrintfErr("Ошибка запуска docker контейнера %s. Ошибка: %v.", curContainerName, err)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+		}
 		return
 	} else {
 		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
@@ -734,6 +747,13 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			} else {
 				logger.PrintfErr("Изменен статус docker контейнера %s. Статус: %v.", curContainerName, curStatus.StatusCode)
 			}
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
+
+			cc.checkChannelWorking(chSett.Id)
+			return
 
 		case <-binInfo.killChan:
 			logger.PrintfDebug("Команда завершить docker контейнер %s.", curContainerName)
@@ -779,12 +799,17 @@ func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSe
 
 // проверка работыканала. Если возникла ошбка, проверяем в настройках, должен ли работать канал
 // если должен, то запускаем его
-func (cc *ChiefChannelServer) checkChannelWorking() {
+func (cc *ChiefChannelServer) checkChannelWorking(channelId int) {
 
 	for _, setts := range cc.channelSetts.ChSettings {
-		if setts.IsWorking {
+		if setts.Id == channelId && setts.IsWorking {
 			if _, ok := cc.ChannelBinMap.Load(setts.Id); !ok {
-				logger.PrintfErr("need restart channel")
+				logger.PrintfWarn("Необходим перезапуск канала с ID = %d", channelId)
+
+				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+				time.AfterFunc(2*time.Second, func() {
+					cc.startChannelsByIDs([]int{channelId})
+				})
 			}
 			break
 		}
