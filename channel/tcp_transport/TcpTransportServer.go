@@ -86,6 +86,7 @@ func (fts *TcpTransportServer) Work() {
 				go fts.startServer()
 			}
 		case <-fts.errorChan:
+			fmt.Println("fts.stopClient() 90 line")
 			fts.stopClient()
 
 		case <-fts.reconnectChan:
@@ -119,6 +120,7 @@ func (fts *TcpTransportServer) startServer() {
 		remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
 
 		if fts.tcpClient != nil {
+			fmt.Println("fts.stopClient() 124 line")
 			fts.stopClient()
 			// fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
 			// 	fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
@@ -134,10 +136,12 @@ func (fts *TcpTransportServer) startServer() {
 					fmt.Sprintf("Успешное подключение клиента к TCP серверу FMTP канала. "+
 						"Адрес подключенного клиента: <%s>", remoteAddr.IP.String()))
 
+				fmt.Println("fts.tcpClient = curConn 140 line")
 				fts.tcpClient = curConn
 				fts.connStateChan <- true
 				fts.fmtpEventChan <- fmtp.RSetup
 
+				fmt.Println("receiveLoop() sendLoop() 145 line")
 				go fts.receiveLoop()
 				go fts.sendLoop()
 			}
@@ -147,20 +151,22 @@ func (fts *TcpTransportServer) startServer() {
 
 //
 func (fts *TcpTransportServer) stopClient() {
-	fts.Lock()
+	//fts.Lock()
 	//utils.ChanSafeClose(fts.cancelWorkChan)
 	fts.cancelWorkChan <- struct{}{}
 
 	fts.connStateChan <- false
 
 	if err := fts.tcpClient.Close(); err != nil {
+		fmt.Println("Ошибка при закрытии клиентского TCP подключения" + err.Error())
 		fts.logMessageChan <- common.LogChannelST(common.SeverityError,
 			fmt.Sprintf("Ошибка при закрытии клиентского TCP подключения FMTP канала. Ошибка: <%s>.", err.Error()))
 	} else {
+		fmt.Println("fts.tcpClient = nil line 166")
 		fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
 		fts.tcpClient = nil
 	}
-	fts.Unlock()
+	//fts.Unlock()
 }
 
 // обработчик получения данных
@@ -169,6 +175,7 @@ func (fts *TcpTransportServer) receiveLoop() {
 		select {
 		// отмена приема данных
 		case <-fts.cancelWorkChan:
+			fmt.Println("cancelWorkChan in receiveLoop() line 179")
 			return
 		// прием данных
 		default:
@@ -179,6 +186,7 @@ func (fts *TcpTransportServer) receiveLoop() {
 						fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 							fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
 					}
+					fmt.Println("fts.errorChan in receiveLoop() line 190")
 					fts.errorChan <- err
 					//fts.stopClient()
 					return
@@ -197,13 +205,16 @@ func (fts *TcpTransportServer) sendLoop() {
 		select {
 		// отмена отправки данных
 		case <-fts.cancelWorkChan:
+			fmt.Println("cancelWorkChan in sendLoop() line 209")
 			return
 
 		// получены данные для отправки
 		case curData := <-fts.toSendDataChan:
-			if _, err := fts.tcpClient.Write(curData.DataToSend); err != nil {
+			if writeBytes, err := fts.tcpClient.Write(curData.DataToSend); err != nil {
+				fmt.Println("Read bytes", writeBytes)
 				fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: <%s>.", err.Error()))
+				fmt.Println("fts.errorChan in sendLoop() line 218")
 				fts.errorChan <- err
 				//fts.stopClient()
 				return

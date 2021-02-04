@@ -161,6 +161,7 @@ func mainReturnWithCode() int {
 
 		// нет подключения к контроллеру в течинии минуты, завершаем приложение
 		case _ = <-chiefClient.CloseChan:
+			fmt.Println(" return chief_channel.FailToConnect")
 			return chief_channel.FailToConnect
 
 		// получено текущее состояние канала

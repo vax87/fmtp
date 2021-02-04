@@ -100,6 +100,7 @@ func (c *Client) Work() {
 					c.disconnTime = time.Now()
 				} else {
 					if c.disconnTime.Add(time.Minute).Before(time.Now()) {
+						fmt.Println(" disconnTime c.CloseChan <- struct{}{}")
 						c.CloseChan <- struct{}{}
 					}
 				}
