@@ -136,7 +136,9 @@ func (cc *ChiefChannelServer) Work() {
 
 				//останавливаем и запускаем все каналы
 				for _, val := range newSetts.ChSettings {
-					if needStartChannel := cc.initChannelState(val); needStartChannel {
+					cc.initChannelState(val)
+
+					if val.IsWorking {
 						needToStartIds = append(needToStartIds, val.Id)
 					}
 				}
@@ -163,13 +165,13 @@ func (cc *ChiefChannelServer) Work() {
 							if newIt.IsWorking {
 								needToStartIds = append(needToStartIds, newIt.Id)
 							}
-							_ = cc.initChannelState(newIt)
+							cc.initChannelState(newIt)
 						}
 					} else { // есть в новых, нет в старых
 						if newIt.IsWorking {
 							needToStartIds = append(needToStartIds, newIt.Id)
-							_ = cc.initChannelState(newIt)
 						}
+						cc.initChannelState(newIt)
 					}
 				}
 
@@ -205,11 +207,6 @@ func (cc *ChiefChannelServer) Work() {
 					cc.startChannelsByIDs(needToStartIds)
 				}
 			})
-
-			// обнуляем состояния каналов
-			// for key := range cc.chStates {
-			// 	delete(cc.chStates, key)
-			// }
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
@@ -448,42 +445,19 @@ func (cc *ChiefChannelServer) Work() {
 			}
 
 		case <-cc.statesSendTicker.C:
-
-			// если от канала нет сообщений состояния и он должен работать, то возможно он свалился
-			// пытаемся запустить канал снова
-			var needToRestartIds []int // идентификаторы каналов, которые необходимо запустить
-
 			// удаляем из мэпки состояний старые состояния
 			for channelId, val := range cc.chStates {
 				if val.Time.Add(10 * channel_state.StateSendInterval).Before(time.Now()) {
-					delete(cc.chStates, channelId)
-					// logger.PrintfErr("delete(cc.chStates, key) %v", channelId)
-
 					// если состояния удалили и в настройках канал должен быть запущен, то добавляем состояние
-					for _, val := range cc.channelSetts.ChSettings {
-						if _, ok := cc.chStates[val.Id]; !ok {
-
-							if needRestartChannel := cc.initChannelState(val); needRestartChannel {
-								needToRestartIds = append(needToRestartIds, val.Id)
-							}
+					for _, setts := range cc.channelSetts.ChSettings {
+						if setts.Id == channelId && setts.IsWorking {
+							delete(cc.chStates, channelId)
+							cc.initChannelState(setts)
 							break
 						}
 					}
 				}
 			}
-
-			// if cc.allStartPerform() {
-			// 	if len(needToRestartIds) > 0 {
-			// 		logger.PrintfWarn("needToRestartIds %v", needToRestartIds)
-
-			// 		//cc.stopChannelsByIDs(needToRestartIds)
-
-			// 		// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
-			// 		time.AfterFunc(2*time.Second, func() {
-			// 			cc.startChannelsByIDs(needToRestartIds)
-			// 		})
-			// 	}
-			// }
 
 			// отправляем heartbeat контроллеру
 			var chStateSlice []channel_state.ChannelState
@@ -739,7 +713,7 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
 	}
 
-	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNextExit)
 
 	for {
 		select {
@@ -754,7 +728,12 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 			}
 			return
 
-		case <-statusCh:
+		case curStatus := <-statusCh:
+			if curStatus.Error != nil {
+				logger.PrintfErr("Изменен статус docker контейнера %s. Статус: %v. Ошибка: %v.", curContainerName, curStatus.StatusCode, curStatus.Error.Message)
+			} else {
+				logger.PrintfErr("Изменен статус docker контейнера %s. Статус: %v.", curContainerName, curStatus.StatusCode)
+			}
 
 		case <-binInfo.killChan:
 			logger.PrintfDebug("Команда завершить docker контейнер %s.", curContainerName)
@@ -778,13 +757,11 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	}
 }
 
-func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSettings) (needStartChannel bool) {
+func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSettings) {
 	var curChannelState string
 	if chSett.IsWorking {
-		needStartChannel = true
 		curChannelState = channel_state.ChannelStateError
 	} else {
-		needStartChannel = false
 		curChannelState = channel_state.ChannelStateStopped
 	}
 
@@ -798,6 +775,18 @@ func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSe
 		ChannelURL:  fmt.Sprintf("http://%s:%d/%s", chSett.URLAddress, chSett.URLPort, chSett.URLPath),
 	},
 		Time: time.Now()}
+}
 
-	return needStartChannel
+// проверка работыканала. Если возникла ошбка, проверяем в настройках, должен ли работать канал
+// если должен, то запускаем его
+func (cc *ChiefChannelServer) checkChannelWorking() {
+
+	for _, setts := range cc.channelSetts.ChSettings {
+		if setts.IsWorking {
+			if _, ok := cc.ChannelBinMap.Load(setts.lId); !ok {
+				logger.PrintfErr("need restart channel")
+			}
+			break
+		}
+	}
 }

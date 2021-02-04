@@ -6,7 +6,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"time"
 
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
@@ -87,7 +86,6 @@ func (fts *TcpTransportServer) Work() {
 				go fts.startServer()
 			}
 		case <-fts.errorChan:
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "fts.stopClient() 90 line")
 			fts.stopClient()
 
 		case <-fts.reconnectChan:
@@ -121,7 +119,6 @@ func (fts *TcpTransportServer) startServer() {
 		remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
 
 		if fts.tcpClient != nil {
-			//fmt.Println("fts.stopClient() 124 line")
 			//fts.stopClient()
 			fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
 				fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
@@ -137,12 +134,10 @@ func (fts *TcpTransportServer) startServer() {
 					fmt.Sprintf("Успешное подключение клиента к TCP серверу FMTP канала. "+
 						"Адрес подключенного клиента: <%s>", remoteAddr.IP.String()))
 
-				fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "fts.tcpClient = curConn 140 line")
 				fts.tcpClient = curConn
 				fts.connStateChan <- true
 				fts.fmtpEventChan <- fmtp.RSetup
 
-				fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "receiveLoop() sendLoop() 145 line")
 				go fts.receiveLoop()
 				go fts.sendLoop()
 			}
@@ -152,7 +147,6 @@ func (fts *TcpTransportServer) startServer() {
 
 //
 func (fts *TcpTransportServer) stopClient() {
-	//fts.Lock()
 	//utils.ChanSafeClose(fts.cancelWorkChan)
 	fts.cancelWorkChan <- struct{}{}
 
@@ -160,16 +154,13 @@ func (fts *TcpTransportServer) stopClient() {
 
 	if fts.tcpClient != nil {
 		if err := fts.tcpClient.Close(); err != nil {
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "Ошибка при закрытии клиентского TCP подключения" + err.Error())
 			fts.logMessageChan <- common.LogChannelST(common.SeverityError,
 				fmt.Sprintf("Ошибка при закрытии клиентского TCP подключения FMTP канала. Ошибка: <%s>.", err.Error()))
 		} else {
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "fts.tcpClient = nil line 166")
 			fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
 			fts.tcpClient = nil
 		}
 	}
-	//fts.Unlock()
 }
 
 // обработчик получения данных
@@ -178,7 +169,6 @@ func (fts *TcpTransportServer) receiveLoop() {
 		select {
 		// отмена приема данных
 		case <-fts.cancelWorkChan:
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "cancelWorkChan in receiveLoop() line 179")
 			return
 		// прием данных
 		default:
@@ -189,12 +179,9 @@ func (fts *TcpTransportServer) receiveLoop() {
 						fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 							fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
 					}
-					fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "fts.errorChan in receiveLoop() line 190")
 					fts.errorChan <- err
-					//fts.stopClient()
 					return
 				} else {
-					fmt.Println(time.Now().Format("2006-01-02 15:04:05.000")+"Read bytes", readBytes)
 					fts.receivedDataChan <- buffer[:readBytes]
 				}
 			}
@@ -208,18 +195,14 @@ func (fts *TcpTransportServer) sendLoop() {
 		select {
 		// отмена отправки данных
 		case <-fts.cancelWorkChan:
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "cancelWorkChan in sendLoop() line 209")
 			return
 
 		// получены данные для отправки
 		case curData := <-fts.toSendDataChan:
-			if writeBytes, err := fts.tcpClient.Write(curData.DataToSend); err != nil {
-				fmt.Println(time.Now().Format("2006-01-02 15:04:05.000")+"Read bytes", writeBytes)
+			if _, err := fts.tcpClient.Write(curData.DataToSend); err != nil {
 				fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: <%s>.", err.Error()))
-				fmt.Println(time.Now().Format("2006-01-02 15:04:05.000") + "fts.errorChan in sendLoop() line 218")
 				fts.errorChan <- err
-				//fts.stopClient()
 				return
 			} else if curData.EventAfterSend != fmtp.None {
 				fts.fmtpEventChan <- curData.EventAfterSend
