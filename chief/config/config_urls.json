@@ -1,0 +1,4 @@
+{
+   "HeartbeatUrl": "http://192.168.1.27:81/api/fmtp",
+   "SettingsUrl": "http://192.168.1.27:81/api/fmtp"
+}

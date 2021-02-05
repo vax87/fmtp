@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"fdps/fmtp/channel/channel_settings"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
-	"fdps/fmtp/logger/common"
-	"fdps/fmtp/utils"
+	"fdps/utils"
 )
 
 // Settings настройки контроллера(chief)
@@ -46,12 +46,30 @@ func (s *ChiefSettings) ReadFromFile() error {
 
 // SaveToFile сохранение настроек в файл
 func (s *ChiefSettings) SaveToFile() error {
-	confData, err := json.Marshal(s)
-	if err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(chiefSettingsFile, utils.JSONPrettyPrint(confData), os.ModePerm); err != nil {
-		return err
+	if confData, errMrsh := json.Marshal(s); errMrsh != nil {
+		return errMrsh
+	} else if errWriteSetts := ioutil.WriteFile(chiefSettingsFile, utils.JsonPrettyPrint(confData), os.ModePerm); errWriteSetts != nil {
+		return errWriteSetts
 	}
 	return nil
+}
+
+// ProviderStatusById - статус (master|slave) провайдера по идентификатору
+func (s *ChiefSettings) ProviderStatusById(idProv int) string {
+	for _, val := range s.ProvidersSetts {
+		if val.ID == idProv {
+			return val.Status
+		}
+	}
+	return "primary"
+}
+
+// ChannelDataTypeById - тип данных (OLDI|AODB) канала по идентификатору
+func (s *ChiefSettings) ChannelDataTypeById(idChan int) string {
+	for _, val := range s.ChannelSetts {
+		if val.Id == idChan {
+			return val.DataType
+		}
+	}
+	return "OLDI"
 }

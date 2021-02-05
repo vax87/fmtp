@@ -3,16 +3,17 @@ package chief_channel
 import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 )
 
 // коды завершения приложения канала
 const (
-	InvalidParamCount = 1001 // приложению передано не верное кол-во аргументов
+	InvalidParamCount = 1001 // приложению передано неверное кол-во аргументов
 	InvalidNetPort    = 1002 // невалидное значение сетевого порта для связи с контроллером
 	InvalidDaemonID   = 1003 // невалидное значение идентификатора канала
 	InvalidWebPort    = 1004 // невалидное значение порта web странички
+	FailToConnect     = 1005 // канал не смог подключиться к серверу (chief) в течении минуты
 )
 
 // от контроллера (chief) могут быть получены сообщения:

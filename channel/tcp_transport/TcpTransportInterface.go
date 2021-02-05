@@ -1,8 +1,8 @@
 package tcp_transport
 
 import (
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 )
 
 // данные для отправки

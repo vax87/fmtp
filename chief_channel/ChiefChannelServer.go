@@ -1,36 +1,49 @@
 package chief_channel
 
 import (
+	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os/exec"
 	"reflect"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 	"github.com/gorilla/websocket"
-	"golang.org/x/net/context"
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
-	"fdps/fmtp/utils"
-	"fdps/fmtp/web"
-	"fdps/fmtp/web_sock"
+	"fdps/utils"
+	"fdps/utils/logger"
+	"fdps/utils/web_sock"
+)
+
+const (
+	srvStateKey        = "WS FMTP каналов. Состояние:"
+	srvStateOkValue    = "Запущен."
+	srvStateErrorValue = "Не запущен."
+	startOldiMsgTag    = "<msg>"
+	endOldiMsgTag      = "</msg>"
+	startOldiAccTag    = "<acc>"
+	endOldiAccTag      = "</acc>"
 )
 
 // сведения об исполняемом файле канала
-type сhannelBin struct {
+type channelBin struct {
 	filePath string        // путь к исполняемому файлу
 	killChan chan struct{} // канал, исользуемый для завершения выполнения
+	//startPerform bool          // выполнене запуск канала
 }
 
 // состояния каналов FMTP с отметкой времени
@@ -43,23 +56,31 @@ type сhannelStateTime struct {
 type ChiefChannelServer struct {
 	ChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для приема настроек каналов и порта для взаимодействия с каналами
 	channelSetts     channel_settings.ChannelSettingsWithPort      // текущие настройки каналов и орт для связи с каналами
-	ChannelStates    chan []channel_state.ChannelState             //канал для передачи состояний каналов
+	ChannelStates    chan []channel_state.ChannelState             // канал для передачи состояний каналов
+	statesSendTicker *time.Ticker                                  // тикер отправки состояния каналов
 
 	IncomeAodbPacketChan chan []byte // канал для приема сообщений от провайдера AODB
 	OutAodbPacketChan    chan []byte // канал для отправки сообщений провайдеру AODB
 
-	LogChan       chan common.LogMessage // канал для передачи сообщений журнала
-	ChannelBinMap map[int]сhannelBin     // ключ - идентификатор канала
-	killerChan    chan struct{}          // канал, по которому передается сигнал о завершение работы канала
+	IncomeOldiPacketChan chan []byte // канал для приема сообщений от провайдера OLDI
+	OutOldiPacketChan    chan []byte // канал для отправки сообщений провайдеру OLDI
 
-	ws *web_sock.WebSockServer
+	ChannelBinMap *sync.Map // ключ - идентификатор каналаб значение типа сhannelBin
 
-	//wsClients map[int]*web_sock.WebSockServerSocket
+	killerChan chan struct{} // канал, по которому передается сигнал о завершение работы канала
+
+	wsServer *web_sock.WebSockServer
+
 	wsClients map[int]*websocket.Conn
 
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
-	aodbIdent int // идентификатор сообщения, отправляемого AODB cервису
+	aodbIdent    int // идентификатор сообщения, отправляемого AODB cервису
+	oldiIdent    int // идентификатор сообщения, отправляемого OLDI cервису
+	withDocker   bool
+	dataFromOldi []byte // буфер полученных данных OLDI
+
+	LogChan chan common.LogMessage // канал для передачи сообщений от каналов
 }
 
 // состояние FMTP канала, при котором ему отправляем сообщений от AODB
@@ -67,7 +88,7 @@ var chValidSt = fmtp.DataReady
 var chValidStStr = chValidSt.ToString()
 
 // NewChiefChannelServer конструктор
-func NewChiefChannelServer() *ChiefChannelServer {
+func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChannelServer {
 	return &ChiefChannelServer{
 		ChannelSettsChan: make(chan channel_settings.ChannelSettingsWithPort, 10),
 		channelSetts: channel_settings.ChannelSettingsWithPort{
@@ -75,23 +96,26 @@ func NewChiefChannelServer() *ChiefChannelServer {
 			ChPort:     0,
 		},
 		ChannelStates:        make(chan []channel_state.ChannelState, 10),
+		statesSendTicker:     time.NewTicker(time.Second),
 		IncomeAodbPacketChan: make(chan []byte, 1024),
 		OutAodbPacketChan:    make(chan []byte, 1024),
-		LogChan:              make(chan common.LogMessage, 100),
+		IncomeOldiPacketChan: make(chan []byte, 1024),
+		OutOldiPacketChan:    make(chan []byte, 1024),
 		killerChan:           make(chan struct{}),
-		ChannelBinMap:        make(map[int]сhannelBin),
-		//chiefChannelWS:       chief_channel.NewChiefChannelServer(),
-		ws:        web_sock.NewWebSockServer(),
-		wsClients: make(map[int]*websocket.Conn),
-		chStates:  make(map[int]сhannelStateTime),
-		aodbIdent: 1,
+		ChannelBinMap:        new(sync.Map),
+		wsServer:             web_sock.NewWebSockServer(done),
+		wsClients:            make(map[int]*websocket.Conn),
+		chStates:             make(map[int]сhannelStateTime),
+		aodbIdent:            1,
+		oldiIdent:            1,
+		withDocker:           workWithDocker,
+		LogChan:              make(chan common.LogMessage, 10),
 	}
 }
 
 // Work реализация работы
 func (cc *ChiefChannelServer) Work() {
-	go cc.ws.Work(utils.ChannelURLPath)
-	//cc.chiefChannelWS.SettChan <- chief_channel.ServerSettings{ChiefPort: cc.ChannelPort}
+	go cc.wsServer.Work("/" + utils.FmtpChannelWsUrlPath)
 
 	for {
 		select {
@@ -101,12 +125,7 @@ func (cc *ChiefChannelServer) Work() {
 			var needToStopIds, needToStartIds []int // идентификаторы каналов, которые необходимо остановить/запустить
 
 			if cc.channelSetts.ChPort != newSetts.ChPort {
-				cc.ws.SettingsChan <- web_sock.WebSockServerSettings{LocalPort: newSetts.ChPort}
-
-				// обнуляем состояния каналов
-				for key := range cc.chStates {
-					delete(cc.chStates, key)
-				}
+				cc.wsServer.SettingsChan <- web_sock.WebSockServerSettings{Port: newSetts.ChPort}
 
 				//останавливаем и запускаем все каналы
 				for _, val := range cc.channelSetts.ChSettings {
@@ -117,15 +136,13 @@ func (cc *ChiefChannelServer) Work() {
 
 				//останавливаем и запускаем все каналы
 				for _, val := range newSetts.ChSettings {
+					cc.initChannelState(val)
+
 					if val.IsWorking {
 						needToStartIds = append(needToStartIds, val.Id)
 					}
 				}
 			} else if !reflect.DeepEqual(cc.channelSetts.ChSettings, newSetts.ChSettings) {
-				// обнуляем состояния каналов
-				for key := range cc.chStates {
-					delete(cc.chStates, key)
-				}
 
 				var oldIt, newIt channel_settings.ChannelSettings
 
@@ -148,11 +165,13 @@ func (cc *ChiefChannelServer) Work() {
 							if newIt.IsWorking {
 								needToStartIds = append(needToStartIds, newIt.Id)
 							}
+							cc.initChannelState(newIt)
 						}
 					} else { // есть в новых, нет в старых
 						if newIt.IsWorking {
 							needToStartIds = append(needToStartIds, newIt.Id)
 						}
+						cc.initChannelState(newIt)
 					}
 				}
 
@@ -177,32 +196,17 @@ func (cc *ChiefChannelServer) Work() {
 			cc.channelSetts.ChSettings = append([]channel_settings.ChannelSettings(nil), newSetts.ChSettings...)
 			cc.channelSetts.ChPort = newSetts.ChPort
 
-			for _, val := range cc.channelSetts.ChSettings {
-				var chWork string
-				if val.IsWorking {
-					chWork = channel_state.ChannelStateError
-				} else {
-					chWork = channel_state.ChannelStateStopped
-				}
-				cc.chStates[val.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
-					ChannelID:   val.Id,
-					LocalName:   val.LocalATC,
-					RemoteName:  val.RemoteATC,
-					DaemonState: chWork,
-					FmtpState:   "disabled",
-					ChannelURL:  fmt.Sprintf("http://%s:%d/%s", val.URLAddress, val.URLPort, val.URLPath),
-				},
-					Time: time.Now()}
-			}
-
 			// останавливаем каналы FMTP
 			if len(needToStopIds) > 0 {
 				cc.stopChannelsByIDs(needToStopIds)
 			}
-			// запускаем каналы FMTP
-			if len(needToStartIds) > 0 {
-				cc.startChannelsByIDs(needToStartIds)
-			}
+			// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+			time.AfterFunc(2*time.Second, func() {
+				// запускаем каналы FMTP
+				if len(needToStartIds) > 0 {
+					cc.startChannelsByIDs(needToStartIds)
+				}
+			})
 
 		// получен новый пакет от провайдера
 		case incomeData := <-cc.IncomeAodbPacketChan:
@@ -216,42 +220,99 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg fdps.FdpsAodbPackage
 					unmErr = json.Unmarshal(incomeData, &dataMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) id: <%s>, Лок. ATC: <%s>, Удал. ATC: <%s>, Текст: <%s>.",
-								fdps.FdpsAodbService, dataMsg.Ident, dataMsg.LocalAtc, dataMsg.RemoteAtc, dataMsg.Text))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text))
 						cc.ProcessAodbPacket(dataMsg)
 					} else {
-						cc.LogChan <- common.LogCntrlST(common.SeverityError,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: <%s>. Ошибка: <%s>.",
-								fdps.FdpsAodbService, string(incomeData), unmErr.Error()))
+						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+							string(incomeData), unmErr.Error())
 					}
 
 				case fdps.FdpsAcknowledge:
 					var accMsg fdps.FdpsAodbAcknowledge
 					unmErr = json.Unmarshal(incomeData, &accMsg)
 					if unmErr == nil {
-						cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы(%s) id: <%s>.", fdps.FdpsAodbService, accMsg.Ident))
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident))
 					} else {
-						cc.LogChan <- common.LogCntrlST(common.SeverityError,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: <%s>. Ошибка: <%s>.",
-								fdps.FdpsAodbService, string(incomeData), unmErr.Error()))
+						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+							string(incomeData), unmErr.Error())
 					}
 				default:
-					cc.LogChan <- common.LogCntrlST(common.SeverityError,
-						fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) неизвестного формата, Текст: <%s>.",
-							fdps.FdpsAodbService, string(incomeData)))
+					logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неизвестного формата, Текст: %s.",
+						string(incomeData))
 				}
 
 			} else {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Получено сообщение от плановой подсистемы(%s) неверного формата, Текст: <%s>. Ошибка: <%s>.",
-						fdps.FdpsAodbService, string(incomeData), unmErr.Error()))
+				logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
+					string(incomeData), unmErr.Error())
+			}
+
+		// получен новый пакет от провайдера OLDI
+		case incomeOldiData := <-cc.IncomeOldiPacketChan:
+			cc.dataFromOldi = append(cc.dataFromOldi, incomeOldiData...)
+
+			// вырезаем все подтверждения <acc>
+			startAccIdx := strings.Index(string(cc.dataFromOldi), startOldiAccTag)
+			endAccIdx := strings.Index(string(cc.dataFromOldi), endOldiAccTag)
+			hasAcc := (startAccIdx != -1 && endAccIdx != -1 && startAccIdx < endAccIdx)
+
+			for {
+				if hasAcc {
+					curAccBytes := make([]byte, 2*(endAccIdx+len(endOldiAccTag)-startAccIdx))
+					copy(curAccBytes, cc.dataFromOldi[startAccIdx:endAccIdx+len(endOldiAccTag)])
+
+					var oldiAcc fdps.FdpsOldiAcknowledge
+					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
+
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes)))
+					}
+
+					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag):]...)
+
+					startAccIdx = strings.Index(string(cc.dataFromOldi), startOldiAccTag)
+					endAccIdx = strings.Index(string(cc.dataFromOldi), endOldiAccTag)
+					hasAcc = (startAccIdx != -1 && startAccIdx < endAccIdx)
+				} else {
+					break
+				}
 
 			}
 
+			startMsgIdx := strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
+			endMsgIdx := strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
+			hasMsg := (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
+
+			for {
+				if hasMsg {
+
+					curMsgBytes := make([]byte, endMsgIdx+len(endOldiMsgTag)-startMsgIdx)
+					copy(curMsgBytes, cc.dataFromOldi[startMsgIdx:endMsgIdx+len(endOldiMsgTag)])
+
+					var oldiPkg fdps.FdpsOldiPackage
+
+					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
+
+						cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text))
+
+						cc.ProcessOldiPacket(oldiPkg)
+					}
+
+					cc.dataFromOldi = append(cc.dataFromOldi[:startMsgIdx], cc.dataFromOldi[endMsgIdx+len(endOldiMsgTag)-startMsgIdx:]...)
+
+					startMsgIdx = strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
+					endMsgIdx = strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
+					hasMsg = (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
+
+				} else {
+					break
+				}
+			}
+
 		// получены данные от WS сервера
-		case curWsPkg := <-cc.ws.ReceiveDataChan:
+		case curWsPkg := <-cc.wsServer.ReceiveDataChan:
 			var curHdr HeaderMsg
 			var unmErr error
 			if unmErr = json.Unmarshal(curWsPkg.Data, &curHdr); unmErr == nil {
@@ -271,23 +332,22 @@ func (cc *ChiefChannelServer) Work() {
 							}
 						}
 
-						if settsData, err := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); err == nil {
-							cc.ws.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
+						if settsData, errMarsh := json.Marshal(CreateSettingsAnswerMsg(channelSetts)); errMarsh == nil {
+							cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: settsData, Sock: cc.wsClients[channelSetts.Id]}
 						}
 					}
 
-				case ChannelHeartbeatHeader: //fmt.Println("!ChannelHeartbeatHeader")
+				case ChannelHeartbeatHeader:
 					var curHbtMsg ChannelHeartbeatMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curHbtMsg); err == nil {
 						cc.chStates[curHbtMsg.ChannelID] = сhannelStateTime{ChannelState: curHbtMsg.ChannelState, Time: time.Now()}
 					}
 
-					// отправляем heartbeat контроллеру
-					var chStateSlice []channel_state.ChannelState
-					for key := range cc.chStates {
-						chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
+					// если каналы были запущены на момент старта контроллера, то
+					// при получении Heartbeat проверяем клиентские сообщения
+					if _, ok := cc.wsClients[curHbtMsg.ChannelID]; !ok {
+						cc.wsClients[curHbtMsg.ChannelID] = curWsPkg.Sock
 					}
-					cc.ChannelStates <- chStateSlice
 
 				case ChannelLogHeader:
 					var curLogMsg ChannelLogMsg
@@ -300,57 +360,111 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg DataMsg
 					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
 						var localAtc, remoteAtc string
+						var channelType string
 						for _, val := range cc.channelSetts.ChSettings {
 							if val.Id == dataMsg.ChannelID {
 								localAtc = val.LocalATC
 								remoteAtc = val.RemoteATC
+								channelType = val.DataType
 								break
 							}
 						}
 
-						var aodbDataMsg fdps.FdpsAodbPackage
-						aodbDataMsg.MsgHeader = fdps.FdpsDataText
-						aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
-						aodbDataMsg.LocalAtc = localAtc
-						aodbDataMsg.RemoteAtc = remoteAtc
-						aodbDataMsg.Text = dataMsg.Text
+						if channelType == fdps.AODBProvider {
+							var aodbDataMsg fdps.FdpsAodbPackage
+							aodbDataMsg.MsgHeader = fdps.FdpsDataText
+							aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
+							aodbDataMsg.LocalAtc = localAtc
+							aodbDataMsg.RemoteAtc = remoteAtc
+							aodbDataMsg.Text = dataMsg.Text
 
-						cc.aodbIdent++
-						if cc.aodbIdent > 100000 {
-							cc.aodbIdent = 1
-						}
+							cc.aodbIdent++
+							if cc.aodbIdent > 100000 {
+								cc.aodbIdent = 1
+							}
 
-						if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-							cc.OutAodbPacketChan <- dataToSend
+							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
+								cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
 
-							cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, fmtp.Operational.ToString(), common.DirectionIncoming,
-								fmt.Sprintf("Отправлено сообщение плановой подсистеме(%s) id: <%d>, Лок. ATC: <%s>, Удал. ATC: <%s>, Текст: <%s>.",
-									fdps.FdpsAodbService, dataMsg.ChannelID, localAtc, remoteAtc, dataMsg.Text))
+								cc.OutAodbPacketChan <- dataToSend
+							}
+						} else if channelType == fdps.OLDIProvider {
+							var oldiDataMsg fdps.FdpsOldiPackage
+							oldiDataMsg.Id = cc.oldiIdent
+							oldiDataMsg.LocalAtc = localAtc
+							oldiDataMsg.RemoteAtc = remoteAtc
+							oldiDataMsg.Text = dataMsg.Text
+
+							cc.oldiIdent++
+							if cc.oldiIdent > 1000 {
+								cc.oldiIdent = 1
+							}
+
+							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
+								cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
+
+								cc.OutOldiPacketChan <- dataToSend
+							}
 						}
 					}
+
 				}
 
 			} else {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: <%s>.", unmErr))
+				logger.PrintfErr("Ошибка разбора сообщения от приложения FMTP канала. Ошибка: %s.", unmErr)
 			}
 
-		// получена ошибка от ws сервера
-		case wsErr := <-cc.ws.ErrorChan:
-			var curLogMsg common.LogMessage
-			if wsErr == nil {
-				web.SetWSChannelState(true)
-				curLogMsg = common.LogCntrlST(common.SeverityInfo, "Запускаем WS сервер для взаимодействия с FMTP каналами.")
-			} else {
-				web.SetWSChannelState(false)
-				curLogMsg = common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Возникла ошибка при работе WS сервера взаимодействия с FMTP каналами. Ошибка: <%s>.", wsErr.Error()))
-			}
-			cc.LogChan <- curLogMsg
+		// получен подключенный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntConnChan:
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Подключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			//userhub_web.ClientConn(userhub_web.FromWebSock(curClnt))
 
-			// получено уведомление от ws сервера
-		case wsInfo := <-cc.ws.InfoChan:
-			cc.LogChan <- common.LogCntrlST(common.SeverityInfo, "Сервер WS для взаимодействия с FMTP каналами. "+wsInfo)
+		// получен отключенный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntDisconnChan:
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Отключен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+			//userhub_web.ClientDisconn(userhub_web.FromWebSock(curClnt))
+
+		// получен отклоненный клиент от WS сервера
+		case curClnt := <-cc.wsServer.ClntRejectChan:
+			logger.PrintfDebug("WS сервер для взаимодействия с FMTP каналами. Отклонен клиент с адресом: %s.", curClnt.RemoteAddr().String())
+
+		// получена ошибка от WS сервера
+		case wsErr := <-cc.wsServer.ErrorChan:
+			logger.PrintfErr("Возникла ошибка при работе WS сервера для взаимодействия с FMTP каналами. Ошибка: %s.", wsErr.Error())
+
+		// получено состояние работоспособности WS сервера для связи с FMTP каналами
+		case connState := <-cc.wsServer.StateChan:
+			switch connState {
+			case web_sock.ServerTryToStart:
+				logger.PrintfDebug("Запускаем WS сервер для взаимодействия с FMTP каналами. Порт: %d. Path: \"%s\".", cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath)
+				logger.SetDebugParam(srvStateKey, fmt.Sprintf("%s Порт: %d. Path: \"%s\"", srvStateOkValue, cc.channelSetts.ChPort, utils.FmtpChannelWsUrlPath), logger.StateOkColor)
+			case web_sock.ServerError:
+				logger.SetDebugParam(srvStateKey, srvStateErrorValue, logger.StateErrorColor)
+			}
+
+		case <-cc.statesSendTicker.C:
+			// удаляем из мэпки состояний старые состояния
+			for channelId, val := range cc.chStates {
+				if val.Time.Add(10 * channel_state.StateSendInterval).Before(time.Now()) {
+					// если состояния удалили и в настройках канал должен быть запущен, то добавляем состояние
+					for _, setts := range cc.channelSetts.ChSettings {
+						if setts.Id == channelId && setts.IsWorking {
+							delete(cc.chStates, channelId)
+							cc.initChannelState(setts)
+							break
+						}
+					}
+				}
+			}
+
+			// отправляем heartbeat контроллеру
+			var chStateSlice []channel_state.ChannelState
+			for key := range cc.chStates {
+				chStateSlice = append(chStateSlice, cc.chStates[key].ChannelState)
+			}
+			cc.ChannelStates <- chStateSlice
 		}
 	}
 }
@@ -370,11 +484,10 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 	if channelID != -1 {
 		if sock, ok := cc.wsClients[channelID]; ok {
 			if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError,
-					fmt.Sprintf("Ошибка формирования сообщения для FMTP канала. Ошибка: <%s>.", mrshErr))
+				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
 			} else {
 				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					cc.ws.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
+					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
 					accMsg.State = fdps.FdpsAckOkText
 				} else {
 					accMsg.State = fdps.FdpsAckFailedText
@@ -389,32 +502,74 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 
 	// отправка подтверждения
 	if dataToSend, mrshErr := json.Marshal(accMsg); mrshErr != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка формирования сообщения подтверждения. Ошибка: <%s>.", mrshErr))
+		logger.PrintfErr("Ошибка формирования сообщения подтверждения. Ошибка: %v.", mrshErr)
 	} else {
 		cc.OutAodbPacketChan <- dataToSend
 	}
 
-	cc.LogChan <- common.LogCntrlSTDT(common.SeverityInfo, common.NoneFmtpType, common.DirectionOutcoming,
-		fmt.Sprintf("Плановой подсистеме(%s) отправлено подтверждение получения сообщения. Текст: <%+v>.",
-			fdps.AODBProvider, accMsg))
+	cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg))
+}
+
+// ProcessOldiPacket обработка пакета OLDI
+func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
+	var channelID int = -1
+
+	for _, val := range cc.channelSetts.ChSettings {
+
+		// от OLDI только cid приходит
+		if pkg.LocalAtc == "" {
+			if val.DataType == fdps.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
+				channelID = val.Id
+				break
+			}
+		} else { // данные от провайдера тренажера (все RemoteAtc одинаковые, LocalAtc не пустой)
+			if val.DataType == fdps.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+				channelID = val.Id
+				break
+			}
+		}
+	}
+	accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
+	if channelID != -1 {
+		if sock, ok := cc.wsClients[channelID]; ok {
+			if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
+			} else {
+				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
+					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
+				}
+			}
+		} else {
+			logger.PrintfErr("Не найдено WebSocket соединение канала для отправки сообщения.")
+		}
+	} else {
+		logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s.", pkg.RemoteAtc)
+	}
+
+	// отправка подтверждения
+	cc.OutOldiPacketChan <- accMsg.ToString()
+
+	cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString()))
 }
 
 // останавливаем каналы с указанным ID
 func (cc *ChiefChannelServer) stopChannelsByIDs(idsToStop []int) {
 STOPL:
 	for _, stopID := range idsToStop {
-		if channelBin, ok := cc.ChannelBinMap[stopID]; ok {
-			channelBin.killChan <- struct{}{}
+		if val, ok := cc.ChannelBinMap.Load(stopID); ok {
+			val.(channelBin).killChan <- struct{}{}
 			<-cc.killerChan
 
-			if !chief_configurator.WorkWithDocker {
-				if err := utils.RemoveChannelBinary(channelBin.filePath); err != nil {
-					cc.LogChan <- common.LogCntrlST(common.SeverityError, err.Error())
+			if !cc.withDocker {
+				if err := utils.RemoveBinary(val.(channelBin).filePath); err != nil {
+					logger.PrintfErr("%v", err)
 					continue STOPL
 				}
 			}
-			close(channelBin.killChan)
-			delete(cc.ChannelBinMap, stopID)
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(stopID)
 		}
 	}
 }
@@ -426,18 +581,24 @@ STARTL:
 	STARTL2:
 		for _, newIt := range cc.channelSetts.ChSettings {
 			if startID == newIt.Id {
-				if chief_configurator.WorkWithDocker {
-					cc.ChannelBinMap[startID] = сhannelBin{killChan: make(chan struct{})}
-					go cc.startChannelContainer(newIt, cc.ChannelBinMap[startID].killChan)
+				if cc.withDocker {
+					cc.ChannelBinMap.Store(startID, channelBin{killChan: make(chan struct{})})
+
+					if val, ok := cc.ChannelBinMap.Load(startID); ok {
+						go cc.startChannelContainer(newIt, val.(channelBin))
+					}
 
 				} else {
-					channelFilePath, err := utils.CopyChannelBinary(newIt.Version, newIt.Id, newIt.LocalATC, newIt.RemoteATC)
+					channelFilePath, err := utils.CopyBinary(newIt.Version, newIt.Id, newIt.LocalATC, newIt.RemoteATC)
 					if err != nil {
-						cc.LogChan <- common.LogCntrlST(common.SeverityError, err.Error())
+						logger.PrintfErr("%v", err)
 						continue STARTL
 					}
-					cc.ChannelBinMap[startID] = сhannelBin{filePath: channelFilePath, killChan: make(chan struct{})}
-					go cc.startChannelProcess(channelFilePath, newIt, cc.ChannelBinMap[startID])
+					cc.ChannelBinMap.Store(startID, channelBin{filePath: channelFilePath, killChan: make(chan struct{})})
+
+					if val, ok := cc.ChannelBinMap.Load(startID); ok {
+						go cc.startChannelProcess(channelFilePath, newIt, val.(channelBin))
+					}
 				}
 				break STARTL2
 			}
@@ -446,16 +607,18 @@ STARTL:
 }
 
 // запуск исполняемого файла fmtp канала
-func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett channel_settings.ChannelSettings, binInfo сhannelBin) {
+func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett channel_settings.ChannelSettings, binInfo channelBin) {
 	cmd := exec.Command(channelFilePath, strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
 		chSett.RemoteATC, chSett.DataType, chSett.URLPath, strconv.Itoa(chSett.URLPort))
 
 	if err := cmd.Start(); err != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError,
-			fmt.Sprintf("Ошибка запуска приложения FMTP канала. Исполняемый файл: <%s>. Иденификатор канала: <%d>. Ошибка: <%s>.",
-				channelFilePath, chSett.Id, err.Error()))
+		logger.PrintfErr("Ошибка запуска приложения FMTP канала. Исполняемый файл: %s. Иденификатор канала: %d. Ошибка: %v.",
+			channelFilePath, chSett.Id, err)
 		return
 	}
+
+	logger.PrintfDebug("Запущено приложения FMTP канала. Исполняемый файл: %s. Иденификатор канала: %d.",
+		channelFilePath, chSett.Id)
 
 	// канал, в который ошибка завершения отправкится
 	done := make(chan error, 1)
@@ -466,25 +629,29 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 	select {
 	case err := <-done:
 		if err != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError,
-				fmt.Sprintf("Нештатное завершение приложения FMTP канала. Исполняемый файл: <%s>. Идентификатор канала: <%d>. Ошибка: <%s>.",
-					channelFilePath, chSett.Id, err.Error()))
+			logger.PrintfErr("Нештатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d. Ошибка: %s.",
+				channelFilePath, chSett.Id, err.Error())
+
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
+
 			if _, ok := cc.chStates[chSett.Id]; ok {
 				curState := cc.chStates[chSett.Id]
 				curState.ChannelState.DaemonState = channel_state.ChannelStateError
 				cc.chStates[chSett.Id] = curState
 			}
 		}
+		cc.checkChannelWorking(chSett.Id)
 		return
 
 	case <-binInfo.killChan:
 		if err := cmd.Process.Kill(); err != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError,
-				fmt.Sprintf("Ошибка завершения выполнения приложения FMTP канала. Ошибка: ,<%s>.", err.Error()))
+			logger.PrintfErr("Ошибка завершения выполнения приложения FMTP канала. Ошибка: %v.", err)
 		} else {
-			cc.LogChan <- common.LogCntrlST(common.SeverityInfo,
-				fmt.Sprintf("Штатное завершение приложения FMTP канала. Исполняемый файл: <%s>. Идентификатор канала: <%d>.",
-					channelFilePath, chSett.Id))
+			logger.PrintfDebug("Штатное завершение приложения FMTP канала. Исполняемый файл: %s. Идентификатор канала: %d.",
+				channelFilePath, chSett.Id)
 		}
 		time.Sleep(1 * time.Second)
 		cc.killerChan <- struct{}{}
@@ -493,46 +660,34 @@ func (cc *ChiefChannelServer) startChannelProcess(channelFilePath string, chSett
 }
 
 // запуск docker контейнера fmtp канала
-func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.ChannelSettings, killChan chan struct{}) {
+func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.ChannelSettings, binInfo channelBin) {
 	ctx := context.Background()
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	defer cli.Close()
 	if err != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError,
-			fmt.Sprintf("Ошибка создания клиента сервиса docker. "+err.Error()))
-	}
-	cli.NegotiateAPIVersion(ctx)
-
-	portBinding := make(nat.PortMap)
-	portSet := make(nat.PortSet)
-
-	if chSett.LocalPort != 0 {
-		hostBinding := nat.PortBinding{
-			HostIP:   "0.0.0.0",
-			HostPort: strconv.Itoa(chSett.LocalPort),
+		logger.PrintfErr("Ошибка создания клиента сервиса docker. Ошибка: %v", err)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
 		}
-		containerPort, bindErr := nat.NewPort("tcp", strconv.Itoa(chSett.LocalPort))
-		if bindErr != nil {
-			cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка открытия порта docker контейнера. "+bindErr.Error()))
-			fmt.Println(" Ошибка открытия порта docker контейнера. " + bindErr.Error())
-		}
-		portBinding[containerPort] = []nat.PortBinding{hostBinding}
-		portSet[containerPort] = struct{}{}
+		return
+	} else {
+		defer cli.Close()
+		cli.NegotiateAPIVersion(ctx)
 	}
-	// exposePorts := make(nat.PortMap)
-	// if chSett.LocalPort != 0 {
-	// 	//binds := make([]nat.PortBinding, 1)
-	// 	binds := []nat.PortBinding{nat.PortBinding{HostIP: "127.0.0.1", HostPort: strconv.Itoa(chSett.LocalPort)}}
-	// 	exposePorts[nat.Port(strconv.Itoa(chSett.LocalPort))] = binds
-	// }
+
 	curContainerName := "fmtp_channel_" + chSett.LocalATC + "_" + chSett.RemoteATC + "_" + strconv.Itoa(chSett.Id)
+	var imageName string
+
+	if len(chief_configurator.ChiefCfg.DockerRegistry) != 0 {
+		imageName = chief_configurator.ChiefCfg.DockerRegistry + "/"
+	}
+	imageName += chief_configurator.ChannelImageName + ":" + chSett.Version
 
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{
-			ExposedPorts: portSet,
-			Image:        chief_configurator.ChiefCfg.DockerRegistry + "/" + chief_configurator.ChannelImageName + ":" + chSett.Version,
-			Cmd: []string{strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
+			Image: imageName,
+			Cmd: []string{"/fdps/fmtp_channel", strconv.Itoa(cc.channelSetts.ChPort), strconv.Itoa(chSett.Id), chSett.LocalATC,
 				chSett.RemoteATC, chSett.DataType, chSett.URLPath, strconv.Itoa(chSett.URLPort)},
 		},
 		&container.HostConfig{
@@ -541,51 +696,122 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 				CPUPercent: 10,
 				Memory:     100 * 1 << 20, // 100 MB
 			},
-			NetworkMode: "host",
-			//PortBindings: portBinding,
-			RestartPolicy: container.RestartPolicy{Name: "always"},
+			NetworkMode:   "host",
+			RestartPolicy: container.RestartPolicy{Name: "no"},
+			AutoRemove:    true,
 		},
 		&network.NetworkingConfig{},
+		nil,
 		curContainerName)
 
 	if crErr != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка создания docker контейнера. "+crErr.Error()))
+		logger.PrintfErr("Ошибка создания docker контейнера %s. Используемый образ: %s. Ошибка: %v.", curContainerName, imageName, crErr)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+		}
+		return
 	} else {
-		cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(" Создан docker контейнер "+curContainerName+"."))
+		logger.PrintfDebug("Создан docker контейнер %s. Используемый образ: %s.", curContainerName, imageName)
 	}
 
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка запуска docker контейнера. "+err.Error()))
+		logger.PrintfErr("Ошибка запуска docker контейнера %s. Ошибка: %v.", curContainerName, err)
+		if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+			close(val.(channelBin).killChan)
+			cc.ChannelBinMap.Delete(chSett.Id)
+		}
+		return
 	} else {
-		cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf(" Запущен docker контейнер "+curContainerName+"."))
+		logger.PrintfDebug("Запущен docker контейнер %s.", curContainerName)
 	}
 
-	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNextExit)
 
 	for {
 		select {
 		case cntErr := <-errCh:
 			if cntErr != nil {
-				cc.LogChan <- common.LogCntrlST(common.SeverityInfo,
-					fmt.Sprintf("Ошибка в работе docker контейнера %s. Текст ошибки: %s.", curContainerName, cntErr.Error()))
+				logger.PrintfErr("Ошибка в работе docker контейнера %s. Ошибка: %v.", curContainerName, cntErr)
 			}
-		case <-statusCh:
 
-		case <-killChan:
-			var stopDur time.Duration = 100 * time.Millisecond
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
+			return
 
-			if stopErr := cli.ContainerStop(ctx, resp.ID, &stopDur); stopErr == nil {
-				cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf("Остановлен docker контейнер "+curContainerName+"."))
-				if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
-					cc.LogChan <- common.LogCntrlST(common.SeverityInfo, fmt.Sprintf("Удален docker контейнер "+curContainerName+"."))
-				} else {
-					cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка удаления docker контейнера. "+rmErr.Error()))
-				}
+		case curStatus := <-statusCh:
+			if curStatus.Error != nil {
+				logger.PrintfErr("Изменен статус docker контейнера %s. Статус: %v. Ошибка: %v.", curContainerName, curStatus.StatusCode, curStatus.Error.Message)
 			} else {
-				cc.LogChan <- common.LogCntrlST(common.SeverityError, fmt.Sprintf("Ошибка остановки docker контейнера. "+stopErr.Error()))
+				logger.PrintfErr("Изменен статус docker контейнера %s. Статус: %v.", curContainerName, curStatus.StatusCode)
+			}
+			if val, ok := cc.ChannelBinMap.Load(chSett.Id); ok {
+				close(val.(channelBin).killChan)
+				cc.ChannelBinMap.Delete(chSett.Id)
+			}
+
+			cc.checkChannelWorking(chSett.Id)
+			return
+
+		case <-binInfo.killChan:
+			logger.PrintfDebug("Команда завершить docker контейнер %s.", curContainerName)
+
+			//var stopDur time.Duration = 100 * time.Millisecond
+
+			if stopErr := cli.ContainerStop(ctx, resp.ID, nil); stopErr == nil {
+				logger.PrintfDebug("Остановлен docker контейнер %s.", curContainerName)
+
+				// if rmErr := cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{}); rmErr == nil {
+				// 	logger.PrintfInfo("Удален docker контейнер %s.", curContainerName)
+				// } else {
+				// 	logger.PrintfErr("Ошибка удаления docker контейнера %s.Ошибка: %v", curContainerName, rmErr)
+				// }
+			} else {
+				logger.PrintfErr("Ошибка остановки docker контейнера %s. Ошибка %v", curContainerName, stopErr)
 			}
 			cc.killerChan <- struct{}{}
 			return
+		}
+	}
+}
+
+func (cc *ChiefChannelServer) initChannelState(chSett channel_settings.ChannelSettings) {
+	var curChannelState string
+	if chSett.IsWorking {
+		curChannelState = channel_state.ChannelStateError
+	} else {
+		curChannelState = channel_state.ChannelStateStopped
+	}
+
+	// добавляем состояние канала
+	cc.chStates[chSett.Id] = сhannelStateTime{ChannelState: channel_state.ChannelState{
+		ChannelID:   chSett.Id,
+		LocalName:   chSett.LocalATC,
+		RemoteName:  chSett.RemoteATC,
+		DaemonState: curChannelState,
+		FmtpState:   "disabled",
+		ChannelURL:  fmt.Sprintf("http://%s:%d/%s", chSett.URLAddress, chSett.URLPort, chSett.URLPath),
+	},
+		Time: time.Now()}
+}
+
+// проверка работыканала. Если возникла ошбка, проверяем в настройках, должен ли работать канал
+// если должен, то запускаем его
+func (cc *ChiefChannelServer) checkChannelWorking(channelId int) {
+
+	for _, setts := range cc.channelSetts.ChSettings {
+		if setts.Id == channelId && setts.IsWorking {
+			if _, ok := cc.ChannelBinMap.Load(setts.Id); !ok {
+				logger.PrintfWarn("Необходим перезапуск канала с ID = %d", channelId)
+
+				// костыль - не успевает удалиться старый контейнер, при создании нового - конфликн имен
+				time.AfterFunc(2*time.Second, func() {
+					cc.startChannelsByIDs([]int{channelId})
+				})
+			}
+			break
 		}
 	}
 }

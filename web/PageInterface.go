@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"runtime"
 
-	"fdps/fmtp/logger/common"
+	"fdps/fmtp/chief/chief_logger/common"
 )
 
 // MB кол-во байт в мегабайте

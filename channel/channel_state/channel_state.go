@@ -1,9 +1,13 @@
 package channel_state
 
+import "time"
+
 const (
 	ChannelStateOk      = "ok"
 	ChannelStateStopped = "stopped"
 	ChannelStateError   = "error"
+
+	StateSendInterval = 1 * time.Second
 )
 
 type ChannelState struct {
@@ -13,4 +17,5 @@ type ChannelState struct {
 	DaemonState string `json:"DaemonState"` // состояние канала *Не переменовывать в ChannelState
 	FmtpState   string `json:"FmtpState"`   // FMTP состояние канала
 	ChannelURL  string `json:"ChannelURL"`  // URL web странички канала
+	StateColor  string `json:"-"`
 }

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/logger/common"
 )
 
 // серверное TCP подключение
@@ -119,6 +119,7 @@ func (fts *TcpTransportServer) startServer() {
 		remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
 
 		if fts.tcpClient != nil {
+			//fts.stopClient()
 			fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
 				fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
 					"Клиент уже подключен. Адрес отклоненного клиента: <%s>", remoteAddr.IP.String()))
@@ -146,19 +147,20 @@ func (fts *TcpTransportServer) startServer() {
 
 //
 func (fts *TcpTransportServer) stopClient() {
-	fts.Lock()
+	//utils.ChanSafeClose(fts.cancelWorkChan)
 	fts.cancelWorkChan <- struct{}{}
 
 	fts.connStateChan <- false
 
-	if err := fts.tcpClient.Close(); err != nil {
-		fts.logMessageChan <- common.LogChannelST(common.SeverityError,
-			fmt.Sprintf("Ошибка при закрытии клиентского TCP подключения FMTP канала. Ошибка: <%s>.", err.Error()))
-	} else {
-		fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
-		fts.tcpClient = nil
+	if fts.tcpClient != nil {
+		if err := fts.tcpClient.Close(); err != nil {
+			fts.logMessageChan <- common.LogChannelST(common.SeverityError,
+				fmt.Sprintf("Ошибка при закрытии клиентского TCP подключения FMTP канала. Ошибка: <%s>.", err.Error()))
+		} else {
+			fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
+			fts.tcpClient = nil
+		}
 	}
-	fts.Unlock()
 }
 
 // обработчик получения данных
@@ -170,17 +172,18 @@ func (fts *TcpTransportServer) receiveLoop() {
 			return
 		// прием данных
 		default:
-			buffer := make([]byte, 8192)
-			if readBytes, err := fts.tcpClient.Read(buffer); err != nil {
-				if err != io.EOF {
-					fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
-						fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
+			if fts.tcpClient != nil {
+				buffer := make([]byte, 8192)
+				if readBytes, err := fts.tcpClient.Read(buffer); err != nil {
+					if err != io.EOF {
+						fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+							fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
+					}
+					fts.errorChan <- err
+					return
+				} else {
+					fts.receivedDataChan <- buffer[:readBytes]
 				}
-				fts.errorChan <- err
-				return
-			} else {
-				fmt.Println("Read bytes", readBytes)
-				fts.receivedDataChan <- buffer[:readBytes]
 			}
 		}
 	}

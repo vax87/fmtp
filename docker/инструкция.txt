@@ -1,0 +1,29 @@
+1. Загружаем docker образы из архива
+    архивы лежат в /Deployment/FMTP/images-tars/fmtp_channel/0.0.1 ( для примера версия 0.0.1 )
+                    /Deployment/FMTP/images-tars/fmtp_chief/0.0.1
+    
+    docker image load -i fmtp_channel.tar
+    docker image load -i fmtp_chief.tar   
+    
+    
+2. Копируем папку /Deployment/FMTP/docker-compose на сервер
+  
+3. В compose файле задаем соответствующую версию образа fmtp_chief
+    
+4. В файле  config_urls.json (в docker-compose/config)
+    прописываем URL конфигуратора.
+    например
+    {
+        "heartbeatUrl": "http://192.168.1.1:80/api/fmtp",
+        "settingsUrl": "http://192.168.1.1:80/api/fmtp"
+    }
+
+5. docker-compose up -d
+
+6. страницы с отладочной информаций доступны по адресам
+    http://127.0.0.1:8060/log - журнал
+    http://127.0.0.1:8060/chief - состояние контроллера
+    на странице состояния контроллера кликабельные ссылки на состояния FMTP каналов
+    
+7. Установка схемы fmtp_log.
+    /Deployment/FMTP/pl_sql/sysdba

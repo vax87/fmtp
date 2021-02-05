@@ -9,8 +9,8 @@ import (
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/fmtp_states"
+	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief_channel"
-	"fdps/fmtp/logger/common"
 	"fdps/fmtp/web"
 )
 
@@ -83,8 +83,10 @@ func mainReturnWithCode() int {
 			return chief_channel.InvalidWebPort
 		}
 
+		done := make(chan struct{})
+
 		// контроллер для работы с контроллером каналов
-		chiefClient = chief_channel.NewChiefChannelClient()
+		chiefClient = chief_channel.NewChiefChannelClient(done)
 	} else {
 		log.Println("FATAL. Invalid ARG count. Get: " + strconv.Itoa(len(os.Args)) + ". Need 8 (_ ChiefPort, ID, LocATC, RemATC, Type, WebPath, WebPort).")
 		return chief_channel.InvalidParamCount
@@ -110,7 +112,7 @@ func mainReturnWithCode() int {
 								fmt.Sprintf("Получены некорректные настройки. Настройки: <%s>. Ошибка: <%s>", channelSetts.ToLogMessage(), checkErr.Error()))
 
 						} else {
-							createLogMessage(common.SeverityInfo,
+							createLogMessage(common.SeverityDebug,
 								fmt.Sprintf("Получены настройки. Настройки: <%s>", channelSetts.ToLogMessage()))
 
 							go fmtpStateCntrl.Work(channelSetts)
@@ -156,6 +158,10 @@ func mainReturnWithCode() int {
 			if dataToSend, err := json.Marshal(chief_channel.CreateChannelLogMsg(curLogMsg)); err == nil {
 				chiefClient.SendChan <- dataToSend
 			}
+
+		// нет подключения к контроллеру в течинии минуты, завершаем приложение
+		case _ = <-chiefClient.CloseChan:
+			return chief_channel.FailToConnect
 
 		// получено текущее состояние канала
 		case curState := <-fmtpStateCntrl.FmtpStateChan:
