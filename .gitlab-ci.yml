@@ -13,8 +13,12 @@ before_script:
   - chmod 700 ~/.ssh
   - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
  
-only:
-  - develop
+only: 
+    refs:
+      - develop
+      - tags
+    variables:
+      - $CI_COMMIT_BRANCH == "develop"
   
 stages:
   - build
