@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"fdps/fmtp/chief/fdps"
+	"fdps/go_utils/logger"
+	"fdps/go_utils/web_sock"
 	"fdps/utils"
-	"fdps/utils/logger"
-	"fdps/utils/web_sock"
 )
 
 // интервал проверки состояния контроллера

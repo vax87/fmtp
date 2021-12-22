@@ -135,8 +135,19 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			}
 
 		// получено сообщение журнала
-		case curLogMsg := <-channelCntrl.LogChan:
-			chief_logger.ChiefLog.FmtpLogChan <- curLogMsg
+		// case curLogMsg := <-channelCntrl.LogChan:
+		// 	//chief_logger.ChiefLog.FmtpLogChan <- curLogMsg
+
+		// 	switch curLogMsg.Severity {
+		// 	case common.SeverityDebug:
+		// 		logger.PrintfDebug("FMTP FORMAT", curLogMsg)
+		// 	case common.SeverityInfo:
+		// 		logger.PrintfInfo("FMTP FORMAT", curLogMsg)
+		// 	case common.SeverityWarning:
+		// 		logger.PrintfWarn("FMTP FORMAT", curLogMsg)
+		// 	case common.SeverityError:
+		// 		logger.PrintfErr("FMTP FORMAT", curLogMsg)
+		// 	}
 
 		case <-done:
 			wg.Done()

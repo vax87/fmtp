@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"fdps/fmtp/chief_configurator/configurator_urls"
-	"fdps/utils/logger"
+	"fdps/go_utils/logger"
 )
 
 type ConfigPage struct {

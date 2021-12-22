@@ -48,7 +48,7 @@ type LogMessage struct {
 // конструктор для использования к FMTP канале
 func CreateMessage(severity string, packetType string,
 	direction string, text string) LogMessage {
-	var  retValue LogMessage
+	var retValue LogMessage
 	retValue.ControllerIP = ""
 	retValue.Source = SourceChannel
 	retValue.ChannelId = NoChannelIdent
@@ -59,6 +59,6 @@ func CreateMessage(severity string, packetType string,
 	retValue.FmtpType = packetType
 	retValue.Direction = direction
 	retValue.Text = text
-	retValue.DateTime = time.Now().Format("2006-01-02 15:04:05.333")
+	retValue.DateTime = time.Now().UTC().Format(LogTimeFormat) //"2006-01-02 15:04:05.333")
 	return retValue
 }

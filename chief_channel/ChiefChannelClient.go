@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/web"
+	"fdps/go_utils/web_sock"
 	"fdps/utils"
-	"fdps/utils/web_sock"
 	"fmt"
 	"time"
 )

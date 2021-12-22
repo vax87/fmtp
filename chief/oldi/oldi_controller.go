@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
+	"fdps/go_utils/logger"
 	"fdps/utils"
-	"fdps/utils/logger"
 )
 
 // интервал проверки состояния контроллера
@@ -142,8 +141,10 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 		default:
 			buffer := make([]byte, 8192)
 			if readBytes, err := clntConn.Read(buffer); err != nil {
-				chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
-					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
+				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				// 	fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
+				logger.PrintfErr("FMTP FORMAT", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err)))
 
 				c.closeClient(clntConn)
 			} else {
@@ -175,8 +176,10 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 			}
 
 			if _, err := clntConn.Write(dataToSend); err != nil {
-				chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
-					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
+				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				// 	fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
+				logger.PrintfErr("FMTP FORMAT", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err)))
 				c.closeClient(clntConn)
 			} else {
 				logger.PrintfDebug("Отправлены данные OLDI провайдеру: %v", string(curData))

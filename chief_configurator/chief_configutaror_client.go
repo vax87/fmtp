@@ -17,8 +17,8 @@ import (
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator/configurator_urls"
+	"fdps/go_utils/logger"
 	"fdps/utils"
-	"fdps/utils/logger"
 )
 
 const dbgChannelVersions = "Версии FMTP каналов"

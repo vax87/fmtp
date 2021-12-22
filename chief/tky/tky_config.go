@@ -1,8 +1,8 @@
 package tky
 
 import (
+	"fdps/go_utils/logger"
 	"fdps/utils"
-	"fdps/utils/logger"
 )
 
 type webServerConf struct {

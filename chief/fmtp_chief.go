@@ -1,19 +1,14 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"sync"
 
 	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/chief_worker"
-	"fdps/fmtp/chief/version"
-
 	"fdps/utils"
-	"fdps/utils/logger"
-	"fdps/utils/logger/log_std"
-	"fdps/utils/logger/log_web"
+
+	"fdps/go_utils/logger"
 )
 
 const (
@@ -24,56 +19,27 @@ const (
 var workWithDocker bool
 var dockerVersion string
 
-func initLoggers() {
-	// логгер с web страничкой
-	log_web.Initialize(log_web.LogWebSettings{
-		StartHttp:    false,
-		LogURLPath:   utils.FmtpChiefWebLogPath,
-		Title:        appName,
-		ShowSetts:    true,
-		SettsURLPath: utils.FmtpChiefWebConfigPath,
-	})
-	logger.AppendLogger(log_web.WebLogger)
-	utils.AppendHandler(log_web.WebLogger)
-
-	log_web.SetVersion(fmt.Sprintf("release[%s] commit[%s] build time[%s]",
-		version.Release,
-		version.Commit,
-		version.BuildTime),
-	)
-
-	// логгер с сохранением в файлы
-	// var ljackSetts log_ljack.LjackSettings
-	// ljackSetts.GenDefault()
-	// ljackSetts.FilesName = appName + ".log"
-	// if err := log_ljack.Initialize(ljackSetts); err != nil {
-	// 	logger.PrintfErr("Ошибка инициализации логгера lumberjack. Ошибка: %s", err.Error())
-	// }
-	// logger.AppendLogger(log_ljack.LogLjack)
-
-	logger.AppendLogger(log_std.LogStd)
-
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC | log.Llongfile)
-
-	logger.AppendLogger(chief_logger.ChiefLog)
-	go chief_logger.ChiefLog.Work()
-}
-
 func initDockerInfo() bool {
 	if dockerVersion, dockErr := utils.GetDockerVersion(); dockErr != nil {
-		log_web.SetDockerVersion("???")
+		logger.SetDockerVersion("???")
 		logger.PrintfErr(dockErr.Error())
 		return false
 	} else {
 		workWithDocker = true
-		log_web.SetDockerVersion(dockerVersion)
+		logger.SetDockerVersion(dockerVersion)
 	}
 	return true
 }
 
 func main() {
-	initLoggers()
-	if initDockerInfo() == false {
+	logger.InitLoggerSettings(utils.AppPath()+"/config/local_logger.json", appName, appVersion)
+	utils.AppendHandler(logger.WebLogger)
+
+	chief_logger.ChiefLog.SetMinSeverity(logger.SevDebug)
+	logger.AppendLogger(chief_logger.ChiefLog)
+	go chief_logger.ChiefLog.Work()
+
+	if !initDockerInfo() {
 		utils.InitFileBinUtils(
 			utils.AppPath()+"/versions",
 			utils.AppPath()+"/runningChannels",
@@ -91,5 +57,4 @@ func main() {
 
 	go chief_worker.Start(workWithDocker, dockerVersion, done, &wg)
 	wg.Wait()
-
 }

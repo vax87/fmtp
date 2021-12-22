@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+const LogTimeFormat = "2006-01-02 15:04:05.000"
+
 // LogChannelST сообщение с использование ST (Severity-Text)
 func LogChannelST(severity string, text string) LogMessage {
 	return LogMessage{
@@ -12,7 +14,7 @@ func LogChannelST(severity string, text string) LogMessage {
 		FmtpType:  NoneFmtpType,
 		Direction: DirectionUnknown,
 		Text:      text,
-		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
+		DateTime:  time.Now().UTC().Format(LogTimeFormat)}
 }
 
 // LogChannelSTDT сообщение с использование STDT (Severity-Type-Direction-Text)
@@ -23,7 +25,7 @@ func LogChannelSTDT(severity string, fmtpType string, direction string, text str
 		FmtpType:  fmtpType,
 		Direction: direction,
 		Text:      text,
-		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
+		DateTime:  time.Now().UTC().Format(LogTimeFormat)}
 }
 
 // LogCntrlSDT сообщение с использование SDT (Severity-DataType-Text)
@@ -36,5 +38,5 @@ func LogCntrlSDT(severity string, dtType string, text string) LogMessage {
 		Severity:  severity,
 		Direction: DirectionUnknown,
 		Text:      text,
-		DateTime:  time.Now().Format("2006-01-02 15:04:05.000")}
+		DateTime:  time.Now().UTC().Format(LogTimeFormat)}
 }

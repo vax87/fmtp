@@ -1,0 +1,23 @@
+{
+	"NeedStdLog": true,
+	"NeedLjackLog": true,
+	"NeedWebLog": true,
+	"StdLfileFlag ": false,
+	"LjackSettings": {
+		"FileSizeMB": 1,
+		"MaxFilesCount": 0,
+		"StoreDays": 30,
+		"FilesPath": "/logs/",
+		"FilesName": "fdps-fmtp-chief.log",
+		"Compress": true,
+		"MinSeverity": "debug"
+	},
+	"LogWebSettings": {
+		"StartHttp": false,
+		"NetPort": 0,
+		"LogURLPath": "log",
+		"Title": "fdps-fmtp-chief",
+		"ShowSetts": true,
+		"SettsURLPath": "config"
+	}
+}
