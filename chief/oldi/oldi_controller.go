@@ -143,7 +143,7 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 			if readBytes, err := clntConn.Read(buffer); err != nil {
 				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 				// 	fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
-				logger.PrintfErr("FMTP FORMAT", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err)))
 
 				c.closeClient(clntConn)
@@ -178,7 +178,7 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 			if _, err := clntConn.Write(dataToSend); err != nil {
 				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 				// 	fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
-				logger.PrintfErr("FMTP FORMAT", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err)))
 				c.closeClient(clntConn)
 			} else {

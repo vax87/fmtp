@@ -58,6 +58,86 @@ func (l *ChiefLogger) Work() {
 	}
 	logger.SetLjackUserFormatFunc(ljackFmtpFormatFunc)
 
+	// свой формат вывода логов на web страницу
+	logger.WebLogSetTableUserFormat(`
+		<div style="display: block;  height: 1000px; position: relative; overflow-x: auto;">
+		<table width="100%" border="1" cellspacing="0" cellpadding="4" class="table table-bordered table-striped mb-0">
+			<colgroup>
+				<col span="1" style="width: 10%;">
+				<col span="7" style="width: 5%;">
+			</colgroup>
+			<tr>
+				<th>Дата, время</th>
+				<th>Источник</th>
+				<th>Серъезность</th>
+				<th>Лок ATC</th>
+				<th>Уд ATC</th>
+				<th>Тип</th>
+				<th>FMTP тип</th>
+				<th>Направление</th>
+				<th>Текст</th>
+			</tr>
+			{{with .Lr}}
+				{{range .}}
+					<tr align="center" bgcolor="{{.MsgColor}}">
+						<td align="left"> {{.DateTime}}	</td>
+						<td align="left"> {{.Source}} </td>
+						<td align="left"> {{.Severity}}	</td>
+						<td align="left"> {{.ChannelLocName}} </td>
+						<td align="left"> {{.ChannelRemName}} </td>
+						<td align="left"> {{.DataType}} </td>
+						<td align="left"> {{.FmtpType}} </td>
+						<td align="left"> {{.Direction}} </td>
+						<td align="left"> {{.Text}} </td>
+					</tr>
+				{{end}}
+			{{end}}
+		</table>
+	`)
+
+	webUserFormatFunc := func(severity string, format string, a ...interface{}) interface{} {
+
+		severityToColor := func(sev string) (msgColor string) {
+			switch sev {
+			case common.SeverityDebug:
+				msgColor = logger.DebugColor
+			case common.SeverityInfo:
+				msgColor = logger.InfoColor
+			case common.SeverityWarning:
+				msgColor = logger.WarningColor
+			case common.SeverityError:
+				msgColor = logger.ErrorColor
+			default:
+				msgColor = logger.DefaultColor
+			}
+			return msgColor
+		}
+
+		var logValue interface{}
+		if len(a) > 0 {
+			fmtpLogMsg, ok := a[0].(common.LogMessage)
+			if ok {
+				logValue = common.LogMessageWithColor{
+					LogMessage: fmtpLogMsg,
+					MsgColor:   severityToColor(severity),
+				}
+			} else {
+				logValue = common.LogMessageWithColor{
+					LogMessage: common.CreateControllerMessage(severity, fmt.Sprintf(format, a...)),
+					MsgColor:   severityToColor(severity),
+				}
+			}
+		} else {
+			logValue = common.LogMessageWithColor{
+				LogMessage: common.CreateControllerMessage(severity, fmt.Sprintf(format, a...)),
+				MsgColor:   severityToColor(severity),
+			}
+		}
+		return logValue
+	}
+	logger.WebLogSetUserFormatFunc(webUserFormatFunc)
+
+	/////////////////
 	go l.oracleLogCntrl.Run()
 
 	for {

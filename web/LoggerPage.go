@@ -158,7 +158,7 @@ var mainPageTemplate = `{{define "T"}}
 			<col style = "width: 5%;">
 			<col style = "width: 7%;">
 			<col style = "width: 7%;">
-		</colgroup>	
+		</colgroup>
 		<tr>
 			<td>Состояние подключенияк БД:</td>
 			<td bgcolor="{{.DbConnColor}}">{{.DbState}}</td>
@@ -172,7 +172,7 @@ var mainPageTemplate = `{{define "T"}}
 		<tr>
 			<td>Очередь записи (размер / max размер):</td>
 			<td>{{.DbLogQueueInfo}}</td>
-			<td>Кол-во принятых логов с начала работы:</td>		
+			<td>Кол-во принятых логов с начала работы:</td>
 			<td>{{.ReceiveLogCount}}</td>
 			<td>Кол-во goroutine:</td>
 			<td>{{.GoroutineCount}}</td>
@@ -182,7 +182,7 @@ var mainPageTemplate = `{{define "T"}}
 		<tr>
 			<td>Время последней проверки кол-ва хранимых логов (UTC):</td>
 			<td>{{.DbCheckCountTime}}</td>
-			<td>Кол-во записанных логов с начала работы:</td>		
+			<td>Кол-во записанных логов с начала работы:</td>
 			<td>{{.DbWroteCount}}</td>
 			<td>Память (Sys):</td>
 			<td>{{with .MemStat}} {{.Sys}} MB {{end}}</td>
@@ -190,21 +190,21 @@ var mainPageTemplate = `{{define "T"}}
 			<td>{{with .MemStat}} {{.HeapObjects}} {{end}}</td>
 		</tr>
 		<tr>
-			<td>Время последней проверки времени хранения логов (UTC):</td>			
+			<td>Время последней проверки времени хранения логов (UTC):</td>
 			<td>{{.DbCheckLifetimeTime}}</td>
 			<td>Версия приложения:</td>
-			<td>{{.SoftVersion}}</td>	
+			<td>{{.SoftVersion}}</td>
 			<td>Память (HeapInuse)</td>
 			<td>{{with .MemStat}} {{.HeapInuse}} MB {{end}}</td>
 			<td>Память (StackInuse):</td>
 			<td>{{with .MemStat}} {{.StackInuse}} MB {{end}}</td>
-		</tr>	
+		</tr>
 	</table>
 
 	<p style="font-weight:bold">Сообщения, полученные от контроллера</p>
 
 	<div style="display: block;  height: 1000px; position: relative; overflow-x: auto;">
-	<table width="100%" border="1" cellspacing="0" cellpadding="4" class="table table-bordered table-striped mb-0">	
+	<table width="100%" border="1" cellspacing="0" cellpadding="4" class="table table-bordered table-striped mb-0">
 		<colgroup>
 			<col span="1" style="width: 10%;">
 			<col span="7" style="width: 5%;">
@@ -212,18 +212,18 @@ var mainPageTemplate = `{{define "T"}}
 		<tr>
 			<th>Дата, время</th>
 			<th>Источник</th>
-			<th>Серъезность</th> 
+			<th>Серъезность</th>
 			<th>Лок ATC</th>
 			<th>Уд ATC</th>
-			<th>Тип</th>	   	
+			<th>Тип</th>
 			<th>FMTP тип</th>
 			<th>Направление</th>
 			<th>Текст</th>
 		</tr>
 		{{with .Lr}}
 			{{range .}}
-				<tr align="center" bgcolor="{{.MsgColor}}">	
-					<td align="left"> {{.DateTime}}	</td>	
+				<tr align="center" bgcolor="{{.MsgColor}}">
+					<td align="left"> {{.DateTime}}	</td>
 					<td align="left"> {{.Source}} </td>
 					<td align="left"> {{.Severity}}	</td>
 					<td align="left"> {{.ChannelLocName}} </td>

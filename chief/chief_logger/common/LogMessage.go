@@ -28,6 +28,12 @@ const (
 	NoneFmtpType string = "-"
 
 	ChannelTypeNone string = "-"
+
+	LogDebugColor   = "#e1e8f6"
+	LogInfoColor    = "#eaf4e3"
+	LogWarningColor = "#edecc3"
+	LogErrorColor   = "#e7cfce"
+	LogDefaultColor = "#EAECEE"
 )
 
 // описание сообщенияя для журнала, получаемого по сети
@@ -45,6 +51,12 @@ type LogMessage struct {
 	DateTime       string `json:"DateTime"`     // дата и время сообщения.
 }
 
+// сообщение журнала с цветом
+type LogMessageWithColor struct {
+	LogMessage
+	MsgColor string // цвет в таблице логов
+}
+
 // конструктор для использования к FMTP канале
 func CreateMessage(severity string, packetType string,
 	direction string, text string) LogMessage {
@@ -58,6 +70,23 @@ func CreateMessage(severity string, packetType string,
 	retValue.Severity = severity
 	retValue.FmtpType = packetType
 	retValue.Direction = direction
+	retValue.Text = text
+	retValue.DateTime = time.Now().UTC().Format(LogTimeFormat) //"2006-01-02 15:04:05.333")
+	return retValue
+}
+
+// конструктор для использования к FMTP канале
+func CreateControllerMessage(severity string, text string) LogMessage {
+	var retValue LogMessage
+	retValue.ControllerIP = ""
+	retValue.Source = SourceChannel
+	retValue.ChannelId = NoChannelIdent
+	retValue.ChannelLocName = NoChannelLocName
+	retValue.ChannelRemName = NoChannelRemName
+	retValue.DataType = ChannelTypeNone
+	retValue.Severity = severity
+	retValue.FmtpType = NoneFmtpType
+	retValue.Direction = DirectionUnknown
 	retValue.Text = text
 	retValue.DateTime = time.Now().UTC().Format(LogTimeFormat) //"2006-01-02 15:04:05.333")
 	return retValue

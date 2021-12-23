@@ -220,7 +220,7 @@ func (cc *ChiefChannelServer) Work() {
 					var dataMsg fdps.FdpsAodbPackage
 					unmErr = json.Unmarshal(incomeData, &dataMsg)
 					if unmErr == nil {
-						logger.PrintfDebug("FMTP FORMAT", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+						logger.PrintfDebug("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text)))
 						// cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 						// 	fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text))
@@ -234,7 +234,7 @@ func (cc *ChiefChannelServer) Work() {
 					var accMsg fdps.FdpsAodbAcknowledge
 					unmErr = json.Unmarshal(incomeData, &accMsg)
 					if unmErr == nil {
-						logger.PrintfDebug("FMTP FORMAT", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+						logger.PrintfDebug("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident)))
 						// cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 						// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident))
@@ -268,7 +268,7 @@ func (cc *ChiefChannelServer) Work() {
 
 					var oldiAcc fdps.FdpsOldiAcknowledge
 					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
-						logger.PrintfInfo("FMTP FORMAT", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+						logger.PrintfInfo("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes))))
 						// cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 						// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes)))
@@ -298,7 +298,7 @@ func (cc *ChiefChannelServer) Work() {
 					var oldiPkg fdps.FdpsOldiPackage
 
 					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
-						logger.PrintfInfo("FMTP FORMAT", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+						logger.PrintfInfo("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text)))
 
 						// cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
@@ -361,13 +361,13 @@ func (cc *ChiefChannelServer) Work() {
 					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
 						switch curLogMsg.LogMessage.Severity {
 						case common.SeverityDebug:
-							logger.PrintfDebug("FMTP FORMAT", curLogMsg.LogMessage)
+							logger.PrintfDebug("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						case common.SeverityInfo:
-							logger.PrintfInfo("FMTP FORMAT", curLogMsg.LogMessage)
+							logger.PrintfInfo("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						case common.SeverityWarning:
-							logger.PrintfWarn("FMTP FORMAT", curLogMsg.LogMessage)
+							logger.PrintfWarn("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						case common.SeverityError:
-							logger.PrintfErr("FMTP FORMAT", curLogMsg.LogMessage)
+							logger.PrintfErr("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						}
 						//cc.LogChan <- curLogMsg.LogMessage
 					}
@@ -401,7 +401,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 
 							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-								logger.PrintfDebug("FMTP FORMAT", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+								logger.PrintfDebug("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
 								// cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 								// 	fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
@@ -421,7 +421,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 
 							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
-								logger.PrintfInfo("FMTP FORMAT", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+								logger.PrintfInfo("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
 								// cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 								// 	fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
@@ -528,7 +528,7 @@ func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
 		cc.OutAodbPacketChan <- dataToSend
 	}
 
-	logger.PrintfDebug("FMTP FORMAT", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
+	logger.PrintfDebug("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg)))
 	// cc.LogChan <- common.LogCntrlSDT(common.SeverityDebug, fdps.AODBProvider,
 	// 	fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg))
@@ -573,7 +573,7 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 	// отправка подтверждения
 	cc.OutOldiPacketChan <- accMsg.ToString()
 
-	logger.PrintfInfo("FMTP FORMAT", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
+	logger.PrintfInfo("FMTP FORMAT %#v", common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString())))
 	// cc.LogChan <- common.LogCntrlSDT(common.SeverityInfo, fdps.OLDIProvider,
 	// 	fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString()))

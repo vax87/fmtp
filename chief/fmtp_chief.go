@@ -33,7 +33,9 @@ func initDockerInfo() bool {
 
 func main() {
 	logger.InitLoggerSettings(utils.AppPath()+"/config/local_logger.json", appName, appVersion)
-	utils.AppendHandler(logger.WebLogger)
+	if logger.LogSettInst.NeedWebLog {
+		utils.AppendHandler(logger.WebLogger)
+	}
 
 	chief_logger.ChiefLog.SetMinSeverity(logger.SevDebug)
 	logger.AppendLogger(chief_logger.ChiefLog)
