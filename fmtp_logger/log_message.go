@@ -94,6 +94,7 @@ func CreateControllerMessage(severity string, text string) LogMessage {
 	return retValue
 }
 
+
 // LogChannelST сообщение с использование ST (Severity-Text)
 func LogChannelST(severity string, text string) LogMessage {
 	return LogMessage{
