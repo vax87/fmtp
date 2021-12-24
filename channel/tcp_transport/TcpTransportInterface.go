@@ -1,8 +1,8 @@
 package tcp_transport
 
 import (
-	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
+	"fdps/fmtp/fmtp_logger"
 )
 
 // данные для отправки
@@ -22,12 +22,12 @@ type TcpTransportSettings struct {
 
 // интерфейс TCP транспорта
 type TcpTransport interface {
-	SettChan() chan TcpTransportSettings // текущие настройки канала
-	ReceivedChan() chan []byte           // канал для принятых данных
-	SendChan() chan DataAndEvent         // канал для отправки данных по TCP
-	EventChan() chan fmtp.FmtpEvent      // событие, генерируемое после отправки (кроме None)
-	LogChan() chan common.LogMessage     // канал для передачи сообщний для журнала
-	ConnStateChan() chan bool            // канал для передачи успешности подключения по TCP
-	ReconnectChan() chan struct{}        // канал для передачи сигнала о необходимости подключиться ксерверу (для TCP клиента)
+	SettChan() chan TcpTransportSettings  // текущие настройки канала
+	ReceivedChan() chan []byte            // канал для принятых данных
+	SendChan() chan DataAndEvent          // канал для отправки данных по TCP
+	EventChan() chan fmtp.FmtpEvent       // событие, генерируемое после отправки (кроме None)
+	LogChan() chan fmtp_logger.LogMessage // канал для передачи сообщний для журнала
+	ConnStateChan() chan bool             // канал для передачи успешности подключения по TCP
+	ReconnectChan() chan struct{}         // канал для передачи сигнала о необходимости подключиться ксерверу (для TCP клиента)
 	Work()
 }

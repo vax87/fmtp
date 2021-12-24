@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_logger/common"
+	log_set "fdps/fmtp/chief/chief_logger/settings"
 	"fdps/fmtp/chief/fdps"
 	"fdps/utils"
 )
@@ -23,7 +23,7 @@ type ChiefSettings struct {
 	AodbProviderPort     int    `json:"AodbProviderPort"`     // TCP порт для связи с плановым сервисом (AODB).
 	DockerRegistry       string `json:"DockerRegistry"`       // репозиторий с docker образами каналовы
 
-	LoggerSetts    common.LoggerSettings              `json:"LoggerSettings"`
+	LoggerSetts    log_set.LoggerSettings             `json:"LoggerSettings"`
 	ChannelSetts   []channel_settings.ChannelSettings `json:"FmtpDaemons"`
 	ProvidersSetts []fdps.ProviderSettings            `json:"Providers"`
 	IsInitialised  bool                               `json:"-"` // признак инициализации настроек (либо получены от конфигуратора, либо считаны из файла)

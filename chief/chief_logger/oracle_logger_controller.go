@@ -1,4 +1,4 @@
-package oracle
+package chief_logger
 
 import (
 	"database/sql"
@@ -11,7 +11,8 @@ import (
 	"github.com/phf/go-queue/queue"
 
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/chief_logger/common"
+	log_state "fdps/fmtp/chief/chief_logger/state"
+	"fdps/fmtp/fmtp_logger"
 	"fdps/go_utils/logger"
 )
 
@@ -39,9 +40,9 @@ const (
 
 // контроллер, выполняющий запись логов в БД
 type OracleLoggerController struct {
-	SettingsChan       chan OracleLoggerSettings // канал приема новых настроек контроллера
-	MessChan           chan common.LogMessage    // канал приема новых сообщений
-	StateChan          chan common.LoggerState   // канал отправки состояния подключения к БД
+	SettingsChan       chan OracleLoggerSettings   // канал приема новых настроек контроллера
+	MessChan           chan fmtp_logger.LogMessage // канал приема новых сообщений
+	StateChan          chan log_state.LoggerState  // канал отправки состояния подключения к БД
 	ChannelStatesChan  chan channel_state.ChannelState
 	ChannelStatesQueue queue.Queue
 
@@ -79,9 +80,9 @@ func NewOracleController() *OracleLoggerController {
 
 // инициализация параметрами по умолчанию
 func (rlc *OracleLoggerController) Init() *OracleLoggerController {
-	rlc.MessChan = make(chan common.LogMessage, 1024)
+	rlc.MessChan = make(chan fmtp_logger.LogMessage, 1024)
 	rlc.SettingsChan = make(chan OracleLoggerSettings)
-	rlc.StateChan = make(chan common.LoggerState, 1)
+	rlc.StateChan = make(chan log_state.LoggerState, 1)
 	rlc.ChannelStatesChan = make(chan channel_state.ChannelState, 100)
 
 	rlc.canExecute = false
@@ -119,9 +120,9 @@ func (rlc *OracleLoggerController) Run() {
 					//if rlc.currentSettings.NeedWork {
 					curErr := rlc.connectToDb()
 					if curErr != nil {
-						rlc.StateChan <- common.LoggerState{
-							LoggerConnected:   common.LoggerStateOk,
-							LoggerDbConnected: common.LoggerStateError,
+						rlc.StateChan <- log_state.LoggerState{
+							LoggerConnected:   log_state.LoggerStateOk,
+							LoggerDbConnected: log_state.LoggerStateError,
 							LoggerDbError:     curErr.Error(),
 							LoggerVersion:     "",
 						}
@@ -160,9 +161,9 @@ func (rlc *OracleLoggerController) Run() {
 				} else {
 					rlc.canExecute = true
 				}
-				rlc.StateChan <- common.LoggerState{
-					LoggerConnected:   common.LoggerStateOk,
-					LoggerDbConnected: common.LoggerStateError,
+				rlc.StateChan <- log_state.LoggerState{
+					LoggerConnected:   log_state.LoggerStateOk,
+					LoggerDbConnected: log_state.LoggerStateError,
 					LoggerDbError:     execErr.Error(),
 					LoggerVersion:     "",
 				}
@@ -179,17 +180,17 @@ func (rlc *OracleLoggerController) Run() {
 				curErr := rlc.heartbeat()
 
 				if curErr != nil {
-					rlc.StateChan <- common.LoggerState{
-						LoggerConnected:   common.LoggerStateOk,
-						LoggerDbConnected: common.LoggerStateError,
+					rlc.StateChan <- log_state.LoggerState{
+						LoggerConnected:   log_state.LoggerStateOk,
+						LoggerDbConnected: log_state.LoggerStateError,
 						LoggerDbError:     curErr.Error(),
 						LoggerVersion:     "",
 					}
 				} else {
 
-					rlc.StateChan <- common.LoggerState{
-						LoggerConnected:   common.LoggerStateOk,
-						LoggerDbConnected: common.LoggerStateOk,
+					rlc.StateChan <- log_state.LoggerState{
+						LoggerConnected:   log_state.LoggerStateOk,
+						LoggerDbConnected: log_state.LoggerStateOk,
 						LoggerDbError:     "",
 						LoggerVersion:     "",
 					}
@@ -201,16 +202,16 @@ func (rlc *OracleLoggerController) Run() {
 			if !rlc.dbSuccess { //&& rlc.currentSettings.NeedWork {
 				curErr := rlc.connectToDb()
 				if curErr != nil {
-					rlc.StateChan <- common.LoggerState{
-						LoggerConnected:   common.LoggerStateOk,
-						LoggerDbConnected: common.LoggerStateError,
+					rlc.StateChan <- log_state.LoggerState{
+						LoggerConnected:   log_state.LoggerStateOk,
+						LoggerDbConnected: log_state.LoggerStateError,
 						LoggerDbError:     curErr.Error(),
 						LoggerVersion:     "",
 					}
 				} else {
-					rlc.StateChan <- common.LoggerState{
-						LoggerConnected:   common.LoggerStateOk,
-						LoggerDbConnected: common.LoggerStateOk,
+					rlc.StateChan <- log_state.LoggerState{
+						LoggerConnected:   log_state.LoggerStateOk,
+						LoggerDbConnected: log_state.LoggerStateOk,
 						LoggerDbError:     "",
 						LoggerVersion:     "",
 					}
@@ -314,7 +315,7 @@ func (rlc *OracleLoggerController) checkQueryQueue() {
 		var insetrCnt int
 		for insetrCnt = 0; insetrCnt < oraMaxInsertCount; insetrCnt++ {
 			if rlc.logQueue.Len() > 0 {
-				oraInsertLogBeginQuery(&curQueryText, common.LogMessage(rlc.logQueue.PopFront().(common.LogMessage)))
+				oraInsertLogBeginQuery(&curQueryText, fmtp_logger.LogMessage(rlc.logQueue.PopFront().(fmtp_logger.LogMessage)))
 				rlc.curInsertCount++
 			} else {
 				break
