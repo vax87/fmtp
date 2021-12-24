@@ -139,13 +139,13 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		// 	//chief_logger.ChiefLog.FmtpLogChan <- curLogMsg
 
 		// 	switch curLogMsg.Severity {
-		// 	case common.SeverityDebug:
+		// 	case fmtp_logger.SeverityDebug:
 		// 		logger.PrintfDebug("FMTP FORMAT", curLogMsg)
-		// 	case common.SeverityInfo:
+		// 	case fmtp_logger.SeverityInfo:
 		// 		logger.PrintfInfo("FMTP FORMAT", curLogMsg)
-		// 	case common.SeverityWarning:
+		// 	case fmtp_logger.SeverityWarning:
 		// 		logger.PrintfWarn("FMTP FORMAT", curLogMsg)
-		// 	case common.SeverityError:
+		// 	case fmtp_logger.SeverityError:
 		// 		logger.PrintfErr("FMTP FORMAT", curLogMsg)
 		// 	}
 

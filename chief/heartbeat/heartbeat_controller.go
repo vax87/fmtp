@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/chief_logger/common"
+	log_state "fdps/fmtp/chief/chief_logger/state"
 	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief/version"
 	"fdps/fmtp/chief_configurator"
@@ -33,7 +33,7 @@ func SetDockerVersion(dockerVers string) {
 }
 
 // SetLoggerState - задать состояние подключения к логгеру
-func SetLoggerState(loggerState common.LoggerState) {
+func SetLoggerState(loggerState log_state.LoggerState) {
 	HeartbeatCntrl.curHeartbeatMsg.LoggerState = loggerState
 }
 
@@ -86,7 +86,7 @@ func Work() {
 	HeartbeatCntrl.curHeartbeatMsg.ControllerVersion = version.Release
 	HeartbeatCntrl.curHeartbeatMsg.DockerVersion = "???"
 
-	HeartbeatCntrl.curHeartbeatMsg.LoggerState = common.LoggerState{
+	HeartbeatCntrl.curHeartbeatMsg.LoggerState = log_state.LoggerState{
 		LoggerConnected:   commonStateError,
 		LoggerDbConnected: commonStateError,
 		LoggerVersion:     "???",
@@ -116,8 +116,8 @@ func Work() {
 				}
 			}
 
-			if HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerConnected != common.LoggerStateOk ||
-				HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerDbConnected != common.LoggerStateOk {
+			if HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerConnected != log_state.LoggerStateOk ||
+				HeartbeatCntrl.curHeartbeatMsg.LoggerState.LoggerDbConnected != log_state.LoggerStateOk {
 				HeartbeatCntrl.curHeartbeatMsg.CommonState = commonStateError
 			}
 

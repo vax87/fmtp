@@ -1,4 +1,4 @@
-package oracle
+package chief_logger
 
 import "strconv"
 

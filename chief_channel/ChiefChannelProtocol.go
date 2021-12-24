@@ -3,8 +3,8 @@ package chief_channel
 import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
+	"fdps/fmtp/fmtp_logger"
 )
 
 // коды завершения приложения канала
@@ -91,11 +91,11 @@ func CreateChannelHeartbeatMsg(state channel_state.ChannelState) ChannelHeartbea
 // канал -> контроллер (chief)
 type ChannelLogMsg struct {
 	HeaderMsg
-	common.LogMessage // сообщение для канала
+	fmtp_logger.LogMessage // сообщение для канала
 }
 
 // CreateChannelLogMsg сформировать сообщение для журнала
-func CreateChannelLogMsg(log common.LogMessage) ChannelLogMsg {
+func CreateChannelLogMsg(log fmtp_logger.LogMessage) ChannelLogMsg {
 	return ChannelLogMsg{HeaderMsg: HeaderMsg{Header: ChannelLogHeader}, LogMessage: log}
 }
 

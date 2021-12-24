@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_logger/common"
+	log_set "fdps/fmtp/chief/chief_logger/settings"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_web"
 	"fdps/fmtp/chief/fdps"
@@ -39,7 +39,7 @@ type ChiefConfiguratorClient struct {
 	configUrls           configurator_urls.ConfiguratorUrls
 	HeartbeatChan        chan HeartbeatMsg                             // канал для приема сообщений о состоянии контроллера
 	FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
-	LoggerSettsChan      chan common.LoggerSettings                    // канал для передачи настроек логгера
+	LoggerSettsChan      chan log_set.LoggerSettings                   // канал для передачи настроек логгера
 	ProviderSettsChan    chan []fdps.ProviderSettings                  // канал для передачи натроек провайдеров
 
 	postResultChan chan httpResult
@@ -56,7 +56,7 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
 		HeartbeatChan:          make(chan HeartbeatMsg, 10),
 		FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort, 1),
-		LoggerSettsChan:        make(chan common.LoggerSettings, 1),
+		LoggerSettsChan:        make(chan log_set.LoggerSettings, 1),
 		ProviderSettsChan:      make(chan []fdps.ProviderSettings, 1),
 		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),

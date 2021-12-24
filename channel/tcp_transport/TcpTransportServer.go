@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
+	"fdps/fmtp/fmtp_logger"
 )
 
 // серверное TCP подключение
@@ -25,9 +25,9 @@ type TcpTransportServer struct {
 	tcpClient      net.Conn      // клиентское подключение по TCPv4
 	cancelWorkChan chan struct{} // канал для сигнала прекращения отправки, чтения данных
 
-	logMessageChan chan common.LogMessage // канал для передачи сообщний для журнала
-	connStateChan  chan bool              // канал для передачи успешности подключения по TCP
-	reconnectChan  chan struct{}          // канал для сообщения TCP клиенту о необходимости подключитья к серверу (не используется)
+	logMessageChan chan fmtp_logger.LogMessage // канал для передачи сообщний для журнала
+	connStateChan  chan bool                   // канал для передачи успешности подключения по TCP
+	reconnectChan  chan struct{}               // канал для сообщения TCP клиенту о необходимости подключитья к серверу (не используется)
 
 	errorChan chan error
 }
@@ -40,7 +40,7 @@ func NewFmtpTcpServer() *TcpTransportServer {
 		toSendDataChan:   make(chan DataAndEvent, 1024),
 		fmtpEventChan:    make(chan fmtp.FmtpEvent),
 		cancelWorkChan:   make(chan struct{}),
-		logMessageChan:   make(chan common.LogMessage, 10),
+		logMessageChan:   make(chan fmtp_logger.LogMessage, 10),
 		connStateChan:    make(chan bool),
 		errorChan:        make(chan error),
 		reconnectChan:    make(chan struct{}),
@@ -63,7 +63,7 @@ func (fts *TcpTransportServer) EventChan() chan fmtp.FmtpEvent {
 	return fts.fmtpEventChan
 }
 
-func (fts *TcpTransportServer) LogChan() chan common.LogMessage {
+func (fts *TcpTransportServer) LogChan() chan fmtp_logger.LogMessage {
 	return fts.logMessageChan
 }
 
@@ -98,21 +98,21 @@ func (fts *TcpTransportServer) startServer() {
 	var listener net.Listener
 	listener, err := net.Listen("tcp", string(":"+strconv.Itoa(fts.curSett.LocalPort)))
 	if err != nil {
-		fts.logMessageChan <- common.LogChannelST(common.SeverityError,
+		fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
 			fmt.Sprintf("Ошибка запуска TCP сервера FMTP канала. Ошибка: <%s>.", err.Error()))
 
 		fts.connStateChan <- false
 		return
 	}
 	fts.connStateChan <- true
-	fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Запущен TCP сервер FMTP канала.")
+	fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityInfo, "Запущен TCP сервер FMTP канала.")
 	defer listener.Close()
 
 	for {
 		var curConn net.Conn
 		curConn, err := listener.Accept()
 		if err != nil {
-			fts.logMessageChan <- common.LogChannelST(common.SeverityError,
+			fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
 				fmt.Sprintf("Ошибка подключения клиента к TCP серверу FMTP канала. Ошибка: <%s>.", err.Error()))
 			continue
 		}
@@ -120,17 +120,17 @@ func (fts *TcpTransportServer) startServer() {
 
 		if fts.tcpClient != nil {
 			//fts.stopClient()
-			fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
+			fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityWarning,
 				fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
 					"Клиент уже подключен. Адрес отклоненного клиента: <%s>", remoteAddr.IP.String()))
 			continue
 		} else {
 			if fts.curSett.ClientAddr != "" && remoteAddr.IP.String() != fts.curSett.ClientAddr {
-				fts.logMessageChan <- common.LogChannelST(common.SeverityWarning,
+				fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityWarning,
 					fmt.Sprintf("Отклонено входящее подключение к TCP серверу FMTP канала. "+
 						"Адрес клиента не соответствует. Адрес отклоненного клиента: <%s>", remoteAddr.IP.String()))
 			} else {
-				fts.logMessageChan <- common.LogChannelST(common.SeverityInfo,
+				fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityInfo,
 					fmt.Sprintf("Успешное подключение клиента к TCP серверу FMTP канала. "+
 						"Адрес подключенного клиента: <%s>", remoteAddr.IP.String()))
 
@@ -154,10 +154,10 @@ func (fts *TcpTransportServer) stopClient() {
 
 	if fts.tcpClient != nil {
 		if err := fts.tcpClient.Close(); err != nil {
-			fts.logMessageChan <- common.LogChannelST(common.SeverityError,
+			fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
 				fmt.Sprintf("Ошибка при закрытии клиентского TCP подключения FMTP канала. Ошибка: <%s>.", err.Error()))
 		} else {
-			fts.logMessageChan <- common.LogChannelST(common.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
+			fts.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityInfo, "Закрыто клиентское TCP соединение FMTP канала.")
 			fts.tcpClient = nil
 		}
 	}
@@ -176,7 +176,7 @@ func (fts *TcpTransportServer) receiveLoop() {
 				buffer := make([]byte, 8192)
 				if readBytes, err := fts.tcpClient.Read(buffer); err != nil {
 					if err != io.EOF {
-						fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+						fts.logMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 							fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
 					}
 					fts.errorChan <- err
@@ -200,7 +200,7 @@ func (fts *TcpTransportServer) sendLoop() {
 		// получены данные для отправки
 		case curData := <-fts.toSendDataChan:
 			if _, err := fts.tcpClient.Write(curData.DataToSend); err != nil {
-				fts.logMessageChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				fts.logMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: <%s>.", err.Error()))
 				fts.errorChan <- err
 				return

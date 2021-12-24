@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/fmtp_logger"
 	"fdps/go_utils/logger"
 	"fdps/utils"
 )
@@ -141,9 +141,9 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 		default:
 			buffer := make([]byte, 8192)
 			if readBytes, err := clntConn.Read(buffer); err != nil {
-				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				// chief_logger.ChiefLog.FmtpLogChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 				// 	fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
-				logger.PrintfErr("FMTP FORMAT %#v", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err)))
 
 				c.closeClient(clntConn)
@@ -176,9 +176,9 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 			}
 
 			if _, err := clntConn.Write(dataToSend); err != nil {
-				// chief_logger.ChiefLog.FmtpLogChan <- common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				// chief_logger.ChiefLog.FmtpLogChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 				// 	fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
-				logger.PrintfErr("FMTP FORMAT %#v", common.LogChannelSTDT(common.SeverityError, common.NoneFmtpType, common.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err)))
 				c.closeClient(clntConn)
 			} else {

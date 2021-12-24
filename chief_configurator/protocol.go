@@ -2,7 +2,7 @@ package chief_configurator
 
 import (
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/chief_logger/common"
+	log_state "fdps/fmtp/chief/chief_logger/state"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/fdps"
 	"fdps/utils"
@@ -63,7 +63,7 @@ type HeartbeatMsg struct {
 	CommonErrorMessage string                       `json:"CommonErrorMessage"`
 	ControllerVersion  string                       `json:"ControllerVersion"`
 	DockerVersion      string                       `json:"DockerVersion"`  // версия docker-engine
-	LoggerState        common.LoggerState           `json:"LoggerState"`    // состояние логгера
+	LoggerState        log_state.LoggerState        `json:"LoggerState"`    // состояние логгера
 	ChannelStates      []channel_state.ChannelState `json:"DaemonStates"`   // состояние FMTP каналов
 	ProviderStates     []fdps.ProviderState         `json:"ProviderStates"` // состояние провайдеров
 }
