@@ -1,25 +1,41 @@
 package web
 
 import (
-	"container/list"
 	"html/template"
 	"log"
 	"sync"
 )
 
+const (
+	//logSizeMax = 100
+	// OkColor цвет состояния 'ОК'
+	OkColor = "#eaf4e3"
+	// ErrorColor цвет состояния 'Ошибка'
+	ErrorColor = "#e7cfce"
+	// StopColor цвет состояния 'Остановлено'
+	StopColor = "#c1c1bf"
+	// DefaultColor цвет неопределенного состояния
+	DefaultColor = "#EAECEE"
+
+	// logDebugColor   = "#e1e8f6"
+	// logInfoColor    = "#eaf4e3"
+	// logWarningColor = "#edecc3"
+	// logErrorColor   = "#e7cfce"
+)
+
 // ChiefPage страница контроллера
 type ChiefPage struct {
 	sync.RWMutex
-	templ     *template.Template
-	Title     string
-	TotalTime timeInWork
+	templ *template.Template
+	Title string
+	//TotalTime timeInWork
 
-	Lr      []*logWithColor
-	logList *list.List
+	//Lr      []*logWithColor
+	//logList *list.List
 
-	GoroutineCount int      // кол-во goroutines
-	MemStat        memUsage // параметры использования памяти
-	SoftVersion    string   // версия софта
+	//GoroutineCount int      // кол-во goroutines
+	//MemStat        memUsage // параметры использования памяти
+	SoftVersion string // версия софта
 
 	ConfConn      string // состояние подключения к конфигуратору
 	ConfConnColor string // цвет состояния подключения к конфигуратору
@@ -68,7 +84,7 @@ func (m *ChiefPage) initialize() {
 	m.Lock()
 	defer m.Unlock()
 
-	m.logList = list.New()
+	//m.logList = list.New()
 
 	var err error
 	if m.templ, err = template.New("ChiefPage").Parse(ChiefPageTemplate); err != nil {
@@ -78,11 +94,11 @@ func (m *ChiefPage) initialize() {
 
 	m.Title = "FMTP Chief"
 
-	m.Lr = make([]*logWithColor, logSizeMax, logSizeMax)
+	// m.Lr = make([]*logWithColor, logSizeMax, logSizeMax)
 
-	for i := 0; i < logSizeMax; i++ {
-		m.logList.PushFront(&logWithColor{MsgColor: DefaultColor})
-	}
+	// for i := 0; i < logSizeMax; i++ {
+	// 	m.logList.PushFront(&logWithColor{MsgColor: DefaultColor})
+	// }
 
 	m.ConfConn = "???"
 	m.ConfConnColor = ErrorColor
@@ -102,46 +118,46 @@ func (m *ChiefPage) initialize() {
 	m.SoftVersion = "???"
 }
 
-func (m *ChiefPage) setGrCount(curGrCount int) {
-	m.GoroutineCount = curGrCount
-}
+// func (m *ChiefPage) setGrCount(curGrCount int) {
+// 	m.GoroutineCount = curGrCount
+// }
 
-func (m *ChiefPage) setMemStat(curMem memUsage) {
-	m.MemStat = curMem
-}
+// func (m *ChiefPage) setMemStat(curMem memUsage) {
+// 	m.MemStat = curMem
+// }
 
 // задать версию софта
 func (m *ChiefPage) setVersion(vers string) {
 	m.SoftVersion = vers
 }
 
-func (m *ChiefPage) setWorkTime(curTime timeInWork) {
-	m.TotalTime = curTime
-}
+// func (m *ChiefPage) setWorkTime(curTime timeInWork) {
+// 	m.TotalTime = curTime
+// }
 
 func (m *ChiefPage) template() *template.Template {
 	return m.templ
 }
 
-func (m *ChiefPage) appendLog(message logWithColor) {
-	m.Lock()
-	defer m.Unlock()
+// func (m *ChiefPage) appendLog(message logWithColor) {
+// 	m.Lock()
+// 	defer m.Unlock()
 
-	m.logList.PushFront(&message)
+// 	m.logList.PushFront(&message)
 
-	for m.logList.Len() > logSizeMax {
-		m.logList.Remove(m.logList.Back())
-	}
-}
+// 	for m.logList.Len() > logSizeMax {
+// 		m.logList.Remove(m.logList.Back())
+// 	}
+// }
 
-func (m *ChiefPage) updateLogs() {
-	for e, i := m.logList.Front(), 0; e != nil && i < logSizeMax; e, i = e.Next(), i+1 {
-		lr, ok := e.Value.(*logWithColor)
-		if ok {
-			m.Lr[i] = lr
-		}
-	}
-}
+// func (m *ChiefPage) updateLogs() {
+// 	for e, i := m.logList.Front(), 0; e != nil && i < logSizeMax; e, i = e.Next(), i+1 {
+// 		lr, ok := e.Value.(*logWithColor)
+// 		if ok {
+// 			m.Lr[i] = lr
+// 		}
+// 	}
+// }
 
 // задание состояния подключения к конфигуратору
 func (m *ChiefPage) setConfigConn(conn bool) {
@@ -306,7 +322,7 @@ var ChiefPageTemplate = `{{define "T"}}
 				<th>Лок ATC</th>
 				<th>Уд ATC</th>
 				<th>Состояние</th>		
-				<th>FMTP остояния</th>			
+				<th>FMTP состояние</th>			
 			</tr>
 			{{with .ChannelStates}}
 				{{range .}}
@@ -337,42 +353,6 @@ var ChiefPageTemplate = `{{define "T"}}
 						<td align="left"> {{.ProviderURL}} </td>
 						<td align="left"> {{.ProviderType}} </td>
 						<td align="left"> {{.ProviderState}} </td>				
-					</tr>
-				{{end}}
-			{{end}}
-		</table>
-
-		<p style="font-weight:bold">Журнал событий</p>
-
-		<div style="display: block;  height: 650px; position: relative; overflow-x: auto;">
-		<table width="100%" border="1" cellspacing="0" cellpadding="4" class="table table-bordered table-striped mb-0">	
-			<colgroup>
-				<col span="1" style="width: 10%;">
-				<col span="7" style="width: 5%;">
-			</colgroup>
-			<tr>
-				<th>Дата, время</th>
-				<th>Источник</th>
-				<th>Серъезность</th> 
-				<th>Лок ATC</th>
-				<th>Уд ATC</th>
-				<th>Тип</th>	   	
-				<th>FMTP тип</th>
-				<th>Направление</th>
-				<th>Текст</th>
-			</tr>
-			{{with .Lr}}
-				{{range .}}
-					<tr align="center" bgcolor="{{.MsgColor}}">	
-						<td align="left"> {{.DateTime}}	</td>	
-						<td align="left"> {{.Source}} </td>
-						<td align="left"> {{.Severity}}	</td>
-						<td align="left"> {{.ChannelLocName}} </td>
-						<td align="left"> {{.ChannelRemName}} </td>
-						<td align="left"> {{.DataType}} </td>
-						<td align="left"> {{.FmtpType}} </td>
-						<td align="left"> {{.Direction}} </td>
-						<td align="left"> {{.Text}} </td>
 					</tr>
 				{{end}}
 			{{end}}

@@ -2,8 +2,10 @@ package chief_channel
 
 import (
 	"encoding/json"
+	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/chief_logger/common"
-	"fdps/fmtp/web"
+
+	"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
 	"fdps/utils"
 	"fmt"
@@ -77,7 +79,6 @@ func (c *Client) Work() {
 
 				c.disconnTime = time.Time{}
 
-				web.SetChiefConn(true)
 				if c.sendSettingsRequest == false {
 					c.LogChan <- common.LogChannelST(common.SeverityDebug,
 						fmt.Sprintf("Запущен FMTP канал id = %d.", c.setts.ChannelID))
@@ -91,9 +92,10 @@ func (c *Client) Work() {
 					}
 				}
 				connStateStr = "Подключен"
+				logger.SetDebugParam("Подключение к контролеру:", connStateStr, channel_state.WebOkColor)
 			} else if wsState == web_sock.ClientDisconnected {
-				web.SetChiefConn(false)
 				connStateStr = "Не подключен"
+				logger.SetDebugParam("Подключение к контролеру:", connStateStr, channel_state.WebOkColor)
 
 				// не было подключения к серверу
 				if c.disconnTime.IsZero() {

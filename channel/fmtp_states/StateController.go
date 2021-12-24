@@ -11,7 +11,8 @@ import (
 	"fdps/fmtp/channel/tcp_transport"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/web"
+	"fdps/go_utils/logger"
+
 	"fdps/utils"
 )
 
@@ -87,12 +88,23 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 		select {
 		// изменено состояние подключения по TCP
 		case tcpConnected := <-fsc.tcpTransport.ConnStateChan():
+			var webState, webStateColor string
+
 			if tcpConnected {
 				fsc.forceNewEvent(fmtp.LSetup)
+				webState = "OK"
+				webStateColor = channel_state.WebOkColor
 			} else {
 				fsc.forceNewEvent(fmtp.RDisconnect)
+				webState = "Ошибка"
+				webStateColor = channel_state.WebErrorColor
 			}
-			web.SetTCPState(tcpConnected)
+
+			if fsc.curSet.NetRole == "server" {
+				logger.SetDebugParam("Состояние TCP сервера:", webState, webStateColor)
+			} else {
+				logger.SetDebugParam("Подключение к удаленному TCP серверу:", webState, webStateColor)
+			}
 
 		// получены данные от контроллера (chief) поверх FMTP
 		case fmtpMsgFromChief := <-fsc.FmtpDataSendChan:

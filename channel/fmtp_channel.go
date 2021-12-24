@@ -8,10 +8,12 @@ import (
 	"strconv"
 
 	"fdps/fmtp/channel/channel_settings"
+	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/channel/fmtp_states"
 	"fdps/fmtp/chief/chief_logger/common"
 	"fdps/fmtp/chief_channel"
-	"fdps/fmtp/web"
+
+	"fdps/go_utils/logger"
 )
 
 // клиент для связи с контроллером каналов
@@ -45,14 +47,25 @@ func createLogMessage(severity string, text string) {
 
 // дополнение сообщения журнала сведениями о канала Id, RemoteAtc, LocalAtc, DataType
 func completeLogMessage(logMsg *common.LogMessage) {
+	curLog := *logMsg
 
-	logMsg.ChannelId = channelSetts.Id
-	logMsg.ChannelLocName = channelSetts.LocalATC
-	logMsg.ChannelRemName = channelSetts.RemoteATC
-	logMsg.DataType = channelSetts.DataType
+	curLog.ChannelId = channelSetts.Id
+	curLog.ChannelLocName = channelSetts.LocalATC
+	curLog.ChannelRemName = channelSetts.RemoteATC
+	curLog.DataType = channelSetts.DataType
 
-	curLog := common.LogMessage(*logMsg)
-	web.AppendLog(curLog)
+	switch curLog.Severity {
+	case common.SeverityDebug:
+		logger.PrintfDebug("FMTP FORMAT %v", curLog)
+	case common.SeverityInfo:
+		logger.PrintfInfo("FMTP FORMAT %v", curLog)
+	case common.SeverityWarning:
+		logger.PrintfWarn("FMTP FORMAT %v", curLog)
+	case common.SeverityError:
+		logger.PrintfErr("FMTP FORMAT %v", curLog)
+	default:
+		logger.PrintfDebug("FMTP FORMAT %v", curLog)
+	}
 }
 
 func main() { os.Exit(mainReturnWithCode()) }
@@ -92,8 +105,96 @@ func mainReturnWithCode() int {
 		return chief_channel.InvalidParamCount
 	}
 
-	web.Initialize(webPath, webPort, new(web.ChannelPage))
-	go web.Start()
+	logger.InitializeWebLog(
+		logger.LogWebSettings{
+			StartHttp:  true,
+			NetPort:    webPort,
+			LogURLPath: webPath,
+			Title:      "FMTP Канал",
+			ShowSetts:  false,
+		})
+	logger.AppendLogger(logger.WebLogger)
+
+	// свой формат вывода логов на web страницу
+	logger.WebLogSetTableUserFormat(`
+		<div style="display: block;  height: 1000px; position: relative; overflow-x: auto;">
+		<table width="100%" border="1" cellspacing="0" cellpadding="4" class="table table-bordered table-striped mb-0">
+			<colgroup>
+				<col span="1" style="width: 10%;">
+				<col span="7" style="width: 5%;">
+			</colgroup>
+			<tr>
+				<th>Дата, время</th>
+				<th>Источник</th>
+				<th>Серъезность</th>
+				<th>Лок ATC</th>
+				<th>Уд ATC</th>
+				<th>Тип</th>
+				<th>FMTP тип</th>
+				<th>Направление</th>
+				<th>Текст</th>
+			</tr>
+			{{with .Lr}}
+				{{range .}}
+					<tr align="center" bgcolor="{{.MsgColor}}">
+						<td align="left"> {{.DateTime}}	</td>
+						<td align="left"> {{.Source}} </td>
+						<td align="left"> {{.Severity}}	</td>
+						<td align="left"> {{.ChannelLocName}} </td>
+						<td align="left"> {{.ChannelRemName}} </td>
+						<td align="left"> {{.DataType}} </td>
+						<td align="left"> {{.FmtpType}} </td>
+						<td align="left"> {{.Direction}} </td>
+						<td align="left"> {{.Text}} </td>
+					</tr>
+				{{end}}
+			{{end}}
+		</table>
+	`)
+
+	webUserFormatFunc := func(severity string, format string, a ...interface{}) interface{} {
+
+		severityToColor := func(sev string) (msgColor string) {
+			switch sev {
+			case common.SeverityDebug:
+				msgColor = logger.DebugColor
+			case common.SeverityInfo:
+				msgColor = logger.InfoColor
+			case common.SeverityWarning:
+				msgColor = logger.WarningColor
+			case common.SeverityError:
+				msgColor = logger.ErrorColor
+			default:
+				msgColor = logger.DefaultColor
+			}
+			return msgColor
+		}
+
+		var logValue interface{}
+		if len(a) > 0 {
+			fmtpLogMsg, ok := a[0].(common.LogMessage)
+			if ok {
+				logValue = common.LogMessageWithColor{
+					LogMessage: fmtpLogMsg,
+					MsgColor:   severityToColor(severity),
+				}
+			} else {
+				logValue = common.LogMessageWithColor{
+					LogMessage: common.CreateControllerMessage(severity, fmt.Sprintf(format, a...)),
+					MsgColor:   severityToColor(severity),
+				}
+			}
+		} else {
+			logValue = common.LogMessageWithColor{
+				LogMessage: common.CreateControllerMessage(severity, fmt.Sprintf(format, a...)),
+				MsgColor:   severityToColor(severity),
+			}
+		}
+		return logValue
+	}
+	logger.WebLogSetUserFormatFunc(webUserFormatFunc)
+
+	/////////////////
 
 	go chiefClient.Work()
 	chiefClient.SettChan <- chief_channel.ClientSettings{ChiefAddress: "127.0.0.1", ChiefPort: chiefPort, ChannelID: channelSetts.Id}
@@ -117,17 +218,20 @@ func mainReturnWithCode() int {
 
 							go fmtpStateCntrl.Work(channelSetts)
 
-							web.SetChannelSetts(web.ChannelSettsWeb{
-								DataType:      channelSetts.DataType,
-								NetRole:       channelSetts.NetRole,
-								LocalATC:      channelSetts.LocalATC,
-								RemoteATC:     channelSetts.RemoteATC,
-								RemoteAddress: channelSetts.RemoteAddress,
-								RemotePort:    channelSetts.RemotePort,
-								LocalPort:     channelSetts.LocalPort,
-								DataEncoding:  channelSetts.DataEncoding,
-							})
-							web.SetVersion(channelSetts.Version)
+							logger.SetDebugParam("Локальный - удаленный ATC:", fmt.Sprintf("%s - %s", channelSetts.LocalATC, channelSetts.RemoteATC), channel_state.WebDefaultColor)
+							logger.SetDebugParam("Тип данных:", channelSetts.DataType, channel_state.WebDefaultColor)
+							logger.SetDebugParam("Кодировка:", channelSetts.DataEncoding, channel_state.WebDefaultColor)
+
+							if channelSetts.NetRole == "server" {
+								logger.SetDebugParam("Тип подключения:", "TCP сервер", channel_state.WebDefaultColor)
+								logger.SetDebugParam("Локальный порт:", strconv.Itoa(channelSetts.LocalPort), channel_state.WebDefaultColor)
+							} else {
+								logger.SetDebugParam("Тип подключения:", "TCP клиент", channel_state.WebDefaultColor)
+								logger.SetDebugParam("Удаленный IP адрес:", channelSetts.RemoteAddress, channel_state.WebDefaultColor)
+								logger.SetDebugParam("Удаленный порт:", strconv.Itoa(channelSetts.RemotePort), channel_state.WebDefaultColor)
+							}
+
+							logger.SetVersion(channelSetts.Version)
 						}
 					} else {
 						createLogMessage(common.SeverityError,
@@ -165,7 +269,11 @@ func mainReturnWithCode() int {
 
 		// получено текущее состояние канала
 		case curState := <-fmtpStateCntrl.FmtpStateChan:
-			web.SetChannelFMTPState(curState.FmtpState)
+			if curState.FmtpState == "data_ready" {
+				logger.SetDebugParam("FMTP состояние:", curState.FmtpState, channel_state.WebOkColor)
+			} else {
+				logger.SetDebugParam("FMTP состояние:", curState.FmtpState, channel_state.WebErrorColor)
+			}
 
 			// отправляем heartbeat сообщение контроллеру (chief)
 			if dataToSend, err := json.Marshal(chief_channel.CreateChannelHeartbeatMsg(curState)); err == nil {

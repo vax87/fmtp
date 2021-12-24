@@ -6,40 +6,37 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
-
-	"fdps/fmtp/chief/chief_logger/common"
 )
 
 // FmtpWeb базования часть web странички
 type FmtpWeb struct {
 	http.Server
-	page      PageInterface
-	startTime time.Time
-	totalTime timeInWork
+	page PageInterface
+	//startTime time.Time
+	//totalTime timeInWork
 }
 
 var webSrv FmtpWeb
 
 func (s *FmtpWeb) handlerMain(w http.ResponseWriter, r *http.Request) {
 	s.updateTime()
-	s.page.setWorkTime(s.totalTime)
+	//s.page.setWorkTime(s.totalTime)
 
 	var curMemStat runtime.MemStats
 	runtime.ReadMemStats(&curMemStat)
 
-	var curMemUsage memUsage
-	curMemUsage.fromRuntimeMemStat(curMemStat)
+	//var curMemUsage memUsage
+	//curMemUsage.fromRuntimeMemStat(curMemStat)
 
-	s.page.setMemStat(curMemUsage)
+	//s.page.setMemStat(curMemUsage)
 
-	s.page.setGrCount(runtime.NumGoroutine())
+	//s.page.setGrCount(runtime.NumGoroutine())
 
-	s.page.updateLogs()
+	//s.page.updateLogs()
 
 	if err := s.page.template().ExecuteTemplate(w, "T", s.page); err != nil {
 		log.Println("template ExecuteTemplate ERROR")
@@ -61,7 +58,7 @@ func Initialize(handleURL string, netPort int, curPage PageInterface) {
 	}
 
 	webSrv.page = curPage
-	webSrv.startTime = time.Now().UTC()
+	//webSrv.startTime = time.Now().UTC()
 	webSrv.page.initialize()
 }
 
@@ -78,104 +75,104 @@ func (s *FmtpWeb) updateTime() {
 	s.page.Lock()
 	defer s.page.Unlock()
 
-	secDuration := uint64(time.Since(s.startTime).Seconds())
-	s.totalTime.Days = strconv.FormatUint(secDuration/(24*60*60), 10)
-	s.totalTime.Hours = strconv.FormatUint((secDuration/(60*60))%24, 10)
-	s.totalTime.Mins = strconv.FormatUint((secDuration/60)%60, 10)
-	s.totalTime.Secs = strconv.FormatUint(secDuration%60, 10)
-	s.totalTime.Now = time.Now().UTC().Format("2006-01-02 15:04:05")
+	// secDuration := uint64(time.Since(s.startTime).Seconds())
+	// s.totalTime.Days = strconv.FormatUint(secDuration/(24*60*60), 10)
+	// s.totalTime.Hours = strconv.FormatUint((secDuration/(60*60))%24, 10)
+	// s.totalTime.Mins = strconv.FormatUint((secDuration/60)%60, 10)
+	// s.totalTime.Secs = strconv.FormatUint(secDuration%60, 10)
+	// s.totalTime.Now = time.Now().UTC().Format("2006-01-02 15:04:05")
 }
 
 // AppendLog добавить сообщение журнала
-func AppendLog(message common.LogMessage) {
-	webSrv.page.appendLog(appendColorToMsg(message))
-}
+// func AppendLog(message common.LogMessage) {
+// 	webSrv.page.appendLog(appendColorToMsg(message))
+// }
 
 // SetVersion задать версию софта
-func SetVersion(vers string) {
-	webSrv.page.setVersion(vers)
-}
+// func SetVersion(vers string) {
+// 	webSrv.page.setVersion(vers)
+// }
 
 //-------------------------ChannelPage
 
 // SetChannelSetts задание настроек FMTP канала (только для ChannelPage)
-func SetChannelSetts(chSetts ChannelSettsWeb) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
-		webSrv.page.(*ChannelPage).setChannelSettings(chSetts)
-	}
-}
+// func SetChannelSetts(chSetts ChannelSettsWeb) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
+// 		//webSrv.page.(*ChannelPage).setChannelSettings(chSetts)
+// 	}
+// }
 
 // SetChiefConn задание состояние подключения к конторллеру (только для ChannelPage)
-func SetChiefConn(chiefConn bool) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
-		webSrv.page.(*ChannelPage).setChiefConn(chiefConn)
-	}
-}
+// func SetChiefConn(chiefConn bool) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
+// 		//webSrv.page.(*ChannelPage).setChiefConn(chiefConn)
+// 	}
+// }
 
 // SetChannelFMTPState задание FMTP состояние канала (только для ChannelPage)
-func SetChannelFMTPState(chFMTPState string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
-		webSrv.page.(*ChannelPage).setChannelFMTPState(chFMTPState)
-	}
-}
+// func SetChannelFMTPState(chFMTPState string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
+// 		//webSrv.page.(*ChannelPage).setChannelFMTPState(chFMTPState)
+// 	}
+// }
 
 // SetTCPState задание состояние TCP транспорта
-func SetTCPState(tcpState bool) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
-		webSrv.page.(*ChannelPage).setTCPState(tcpState)
-	}
-}
+// func SetTCPState(tcpState bool) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "ChannelPage") {
+// 		//webSrv.page.(*ChannelPage).setTCPState(tcpState)
+// 	}
+// }
 
 //-------------------------LoggerPage
 
 // SetDbSettings задание настроек подключения в БД (только для LoggerPage)
-func SetDbSettings(dbSetts string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbSettings(dbSetts)
-	}
-}
+// func SetDbSettings(dbSetts string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbSettings(dbSetts)
+// 	}
+// }
 
 // SetDbQueueInfo задание параметров очередди сообщений (только для LoggerPage)
-func SetDbQueueInfo(queueInfo string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbQueueInfo(queueInfo)
-	}
-}
+// func SetDbQueueInfo(queueInfo string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbQueueInfo(queueInfo)
+// 	}
+// }
 
 // SetDbState задание состояния БД (только для LoggerPage)
-func SetDbState(dbState string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbState(dbState)
-	}
-}
+// func SetDbState(dbState string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbState(dbState)
+// 	}
+// }
 
 // SetDbLastError последняя ошибка при работе с БД (только для LoggerPage)
-func SetDbLastError(dbError string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbLastError(dbError)
-	}
-}
+// func SetDbLastError(dbError string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbLastError(dbError)
+// 	}
+// }
 
 // AppendDbWroteCount кол-во записанных логов с начала работы (только для LoggerPage)
-func AppendDbWroteCount(wroteCount int) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).appendDbWroteCount(wroteCount)
-	}
-}
+// func AppendDbWroteCount(wroteCount int) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).appendDbWroteCount(wroteCount)
+// 	}
+// }
 
 // SetDbCheckCount время проверки кол-ва хранимых логов (только для LoggerPage)
-func SetDbCheckCount(dbCheckTime string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbCheckCount(dbCheckTime)
-	}
-}
+// func SetDbCheckCount(dbCheckTime string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbCheckCount(dbCheckTime)
+// 	}
+// }
 
 // SetDbCheckLifetime время проверки хранения логов (только для LoggerPage)
-func SetDbCheckLifetime(dbCheckTime string) {
-	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
-		webSrv.page.(*LoggerPage).setDbCheckLifetime(dbCheckTime)
-	}
-}
+// func SetDbCheckLifetime(dbCheckTime string) {
+// 	if strings.ContainsAny(reflect.TypeOf(webSrv.page).String(), "LoggerPage") {
+// 		//webSrv.page.(*LoggerPage).setDbCheckLifetime(dbCheckTime)
+// 	}
+// }
 
 //-------------------------ChiefPage
 
@@ -252,21 +249,21 @@ func SetProviderStates(states []ProviderStateWeb) {
 ///////////////////////////
 
 // дополняем сообщенияе журнала цветом
-func appendColorToMsg(msg common.LogMessage) logWithColor {
-	retValue := logWithColor{LogMessage: msg}
+// func appendColorToMsg(msg common.LogMessage) logWithColor {
+// 	retValue := logWithColor{LogMessage: msg}
 
-	switch msg.Severity {
-	case common.SeverityDebug:
-		retValue.MsgColor = logDebugColor
-	case common.SeverityInfo:
-		retValue.MsgColor = logInfoColor
-	case common.SeverityWarning:
-		retValue.MsgColor = logWarningColor
-	case common.SeverityError:
-		retValue.MsgColor = logErrorColor
-	default:
-		retValue.MsgColor = DefaultColor
-	}
+// 	switch msg.Severity {
+// 	case common.SeverityDebug:
+// 		retValue.MsgColor = logDebugColor
+// 	case common.SeverityInfo:
+// 		retValue.MsgColor = logInfoColor
+// 	case common.SeverityWarning:
+// 		retValue.MsgColor = logWarningColor
+// 	case common.SeverityError:
+// 		retValue.MsgColor = logErrorColor
+// 	default:
+// 		retValue.MsgColor = DefaultColor
+// 	}
 
-	return retValue
-}
+// 	return retValue
+// }

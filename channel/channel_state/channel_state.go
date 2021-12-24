@@ -8,6 +8,11 @@ const (
 	ChannelStateError   = "error"
 
 	StateSendInterval = 1 * time.Second
+
+	WebOkColor      = "#DFF7DE"
+	WebErrorColor   = "#F2C4CA"
+	WebStopColor    = "#F4EDBA"
+	WebDefaultColor = "#EAECEE"
 )
 
 type ChannelState struct {
