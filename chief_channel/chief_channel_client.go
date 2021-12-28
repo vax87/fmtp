@@ -63,7 +63,6 @@ func (c *Client) Work() {
 			}
 
 		// данные для отправки
-		//case _ = <-c.SendChan:
 		case toChiefData := <-c.SendChan:
 			c.ws.SendDataChan <- toChiefData
 
@@ -79,7 +78,7 @@ func (c *Client) Work() {
 
 				c.disconnTime = time.Time{}
 
-				if c.sendSettingsRequest == false {
+				if !c.sendSettingsRequest {
 					c.LogChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityDebug,
 						fmt.Sprintf("Запущен FMTP канал id = %d.", c.setts.ChannelID))
 

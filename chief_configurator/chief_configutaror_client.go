@@ -3,7 +3,6 @@ package chief_configurator
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,10 +11,10 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
-	log_set "fdps/fmtp/chief/chief_logger/settings"
 	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/chief/chief_web"
-	"fdps/fmtp/chief/fdps"
+
 	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/go_utils/logger"
 	"fdps/utils"
@@ -37,10 +36,9 @@ type httpResult struct {
 // клиент контроллера для подключения к конфигуратору
 type ChiefConfiguratorClient struct {
 	configUrls           configurator_urls.ConfiguratorUrls
-	HeartbeatChan        chan HeartbeatMsg                             // канал для приема сообщений о состоянии контроллера
 	FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
-	LoggerSettsChan      chan log_set.LoggerSettings                   // канал для передачи настроек логгера
-	ProviderSettsChan    chan []fdps.ProviderSettings                  // канал для передачи натроек провайдеров
+	LoggerSettsChan      chan chief_settings.LoggerSettings            // канал для передачи настроек логгера
+	ProviderSettsChan    chan []chief_settings.ProviderSettings        // канал для передачи натроек провайдеров
 
 	postResultChan chan httpResult
 
@@ -49,18 +47,20 @@ type ChiefConfiguratorClient struct {
 	withDocker bool
 
 	channelVersions []string // список версий приложений/docker бразов FMTP канала
+
+	sendHeartbeatTicker *time.Ticker
 }
 
 // NewChiefClient конструктор клиента
 func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
-		HeartbeatChan:          make(chan HeartbeatMsg, 10),
 		FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort, 1),
-		LoggerSettsChan:        make(chan log_set.LoggerSettings, 1),
-		ProviderSettsChan:      make(chan []fdps.ProviderSettings, 1),
+		LoggerSettsChan:        make(chan chief_settings.LoggerSettings, 1),
+		ProviderSettsChan:      make(chan []chief_settings.ProviderSettings, 1),
 		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
+		sendHeartbeatTicker:    time.NewTicker(time.Second),
 	}
 }
 
@@ -130,10 +130,14 @@ func (cc *ChiefConfiguratorClient) Work() {
 				})
 			}
 
-		// получено собщение о состоянии контроллера
-		case hbMgs := <-cc.HeartbeatChan:
-			if ChiefCfg.IsInitialised == true {
-				go cc.postToConfigurator(cc.configUrls.HeartbeatURLStr, hbMgs)
+		// сработал таймер отправки состояния (heartbeat)
+		case <-cc.sendHeartbeatTicker.C:
+			if ChiefCfg.IsInitialised {
+				go cc.postToConfigurator(cc.configUrls.HeartbeatURLStr,
+					HeartbeatMsg{
+						MessageHeader: MessageHeader{Header: HeartbeatHeader},
+						ChiefState:    chief_state.CommonChiefState,
+					})
 			}
 
 		// сработал таймер считывания настроек из файла
@@ -174,23 +178,23 @@ func (cc *ChiefConfiguratorClient) postToConfigurator(url string, msg interface{
 			if body, readErr := ioutil.ReadAll(resp.Body); readErr == nil {
 				if bytes.Contains(body, []byte("error")) { //пишем в логи только ошибки
 
-					cc.postResultChan <- httpResult{err: errors.New(fmt.Sprintf("Не валидное тело http пакета. Тело пакета: %s", string(body)))}
+					cc.postResultChan <- httpResult{err: fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))}
 				}
 				if ind := strings.Index(string(body), "{"); ind >= 0 {
 					cc.postResultChan <- httpResult{result: body[ind:], err: nil}
 				} else {
-					cc.postResultChan <- httpResult{err: errors.New(fmt.Sprintf("Не валидное тело http пакета. Тело пакета: %s", string(body)))}
+					cc.postResultChan <- httpResult{err: fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))}
 				}
 			} else {
-				cc.postResultChan <- httpResult{err: errors.New(fmt.Sprintf("Ошибка чтения ответа http запроса. Тело пакета: %s. Ошибка: %s", string(body), readErr.Error()))}
+				cc.postResultChan <- httpResult{err: fmt.Errorf("Ошибка чтения ответа http запроса. Тело пакета: %s. Ошибка: %s", string(body), readErr.Error())}
 			}
 		} else {
-			cc.postResultChan <- httpResult{err: errors.New(fmt.Sprintf("HTPP запрос выполнен с ошибкой. Запрос: %s. URL: %s. Статус ответа: %s",
-				jsonValue, url, resp.Status))}
+			cc.postResultChan <- httpResult{err: fmt.Errorf("HTPP запрос выполнен с ошибкой. Запрос: %s. URL: %s. Статус ответа: %s",
+				jsonValue, url, resp.Status)}
 		}
 	} else {
-		cc.postResultChan <- httpResult{err: errors.New(fmt.Sprintf("Ошибка выполнения HTPP запроса. Запрос: %s. URL: %s. Ошибка: %s",
-			jsonValue, url, postErr.Error()))}
+		cc.postResultChan <- httpResult{err: fmt.Errorf("Ошибка выполнения HTPP запроса. Запрос: %s. URL: %s. Ошибка: %s",
+			jsonValue, url, postErr.Error())}
 	}
 }
 
@@ -200,7 +204,7 @@ func (cc *ChiefConfiguratorClient) initBeforeGetSettings() {
 
 	var versErr error
 
-	if cc.withDocker == false {
+	if !cc.withDocker {
 		if cc.channelVersions, versErr = utils.GetChannelVersions(); versErr != nil {
 			logger.PrintfErr("Ошибка получения списка версий приложения FMTP канал. Ошибка: %v", versErr)
 		} else {
@@ -250,7 +254,7 @@ func (cc *ChiefConfiguratorClient) initAfterGetSettings() {
 // отправляе настройки каналам, провайдерам, клиенту логгера
 func (cc *ChiefConfiguratorClient) sendSettings() {
 	// добавляем в настройки URL
-	for ind, _ := range ChiefCfg.ChannelSetts {
+	for ind := range ChiefCfg.ChannelSetts {
 		ChiefCfg.ChannelSetts[ind].URLAddress = ChiefCfg.IPAddr
 		ChiefCfg.ChannelSetts[ind].URLPath = "channel"
 		ChiefCfg.ChannelSetts[ind].URLPort = utils.FmtpChannelStartWebPort + ChiefCfg.ChannelSetts[ind].Id
@@ -267,18 +271,21 @@ func (cc *ChiefConfiguratorClient) sendSettings() {
 
 	// выставляем кодировку сообщений для OLDI провайдеров
 	for idx, val := range ChiefCfg.ProvidersSetts {
-		if val.DataType == fdps.OLDIProvider {
+		if val.DataType == chief_settings.OLDIProvider {
 			ChiefCfg.ProvidersSetts[idx].ProviderEncoding = ChiefCfg.OldiProviderEncoding
 		}
 	}
 
 	// отправляем настройки провайдеров
 	for ind, val := range ChiefCfg.ProvidersSetts {
-		if val.DataType == fdps.AODBProvider {
+		if val.DataType == chief_settings.AODBProvider {
 			ChiefCfg.ProvidersSetts[ind].LocalPort = ChiefCfg.AodbProviderPort
-		} else if val.DataType == fdps.OLDIProvider {
+		} else if val.DataType == chief_settings.OLDIProvider {
 			ChiefCfg.ProvidersSetts[ind].LocalPort = ChiefCfg.OldiProviderPort
 		}
 	}
 	cc.ProviderSettsChan <- ChiefCfg.ProvidersSetts
+
+	chief_state.CommonChiefState.CntrlID = ChiefCfg.CntrlID
+	chief_state.CommonChiefState.IPAddr = ChiefCfg.IPAddr
 }

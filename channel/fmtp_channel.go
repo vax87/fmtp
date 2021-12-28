@@ -47,24 +47,22 @@ func createLogMessage(severity string, text string) {
 
 // дополнение сообщения журнала сведениями о канала Id, RemoteAtc, LocalAtc, DataType
 func completeLogMessage(logMsg *fmtp_logger.LogMessage) {
-	curLog := *logMsg
+	logMsg.ChannelId = channelSetts.Id
+	logMsg.ChannelLocName = channelSetts.LocalATC
+	logMsg.ChannelRemName = channelSetts.RemoteATC
+	logMsg.DataType = channelSetts.DataType
 
-	curLog.ChannelId = channelSetts.Id
-	curLog.ChannelLocName = channelSetts.LocalATC
-	curLog.ChannelRemName = channelSetts.RemoteATC
-	curLog.DataType = channelSetts.DataType
-
-	switch curLog.Severity {
+	switch logMsg.Severity {
 	case fmtp_logger.SeverityDebug:
-		logger.PrintfDebug("FMTP FORMAT %v", curLog)
+		logger.PrintfDebug("FMTP FORMAT %v", *logMsg)
 	case fmtp_logger.SeverityInfo:
-		logger.PrintfInfo("FMTP FORMAT %v", curLog)
+		logger.PrintfInfo("FMTP FORMAT %v", *logMsg)
 	case fmtp_logger.SeverityWarning:
-		logger.PrintfWarn("FMTP FORMAT %v", curLog)
+		logger.PrintfWarn("FMTP FORMAT %v", *logMsg)
 	case fmtp_logger.SeverityError:
-		logger.PrintfErr("FMTP FORMAT %v", curLog)
+		logger.PrintfErr("FMTP FORMAT %v", *logMsg)
 	default:
-		logger.PrintfDebug("FMTP FORMAT %v", curLog)
+		logger.PrintfDebug("FMTP FORMAT %v", *logMsg)
 	}
 }
 
@@ -186,7 +184,7 @@ func mainReturnWithCode() int {
 			}
 
 		// нет подключения к контроллеру в течинии минуты, завершаем приложение
-		case _ = <-chiefClient.CloseChan:
+		case <-chiefClient.CloseChan:
 			return chief_channel.FailToConnect
 
 		// получено текущее состояние канала
