@@ -4,30 +4,29 @@ import (
 	"database/sql"
 	"fmt"
 
-	"fdps/fmtp/channel/channel_state"
-	log_set "fdps/fmtp/chief/chief_logger/settings"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp_logger"
 
-	"fdps/fmtp/chief/heartbeat"
+	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_state"
 
 	"fdps/go_utils/logger"
 )
 
 // ChiefLogger логгер, записывающий сообщения в БД
 type ChiefLogger struct {
-	SettsChan         chan log_set.LoggerSettings
-	ChannelStatesChan chan channel_state.ChannelState
-	oracleLogCntrl    *OracleLoggerController // контроллер записи в БД oracle
-	minSeverity       logger.Severity
+	SettsChan chan chief_settings.LoggerSettings
+	//ChannelStatesChan chan channel_state.ChannelState
+	oracleLogCntrl *OracleLoggerController // контроллер записи в БД oracle
+	minSeverity    logger.Severity
 }
 
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
-		SettsChan:         make(chan log_set.LoggerSettings, 1),
-		ChannelStatesChan: make(chan channel_state.ChannelState, 100),
-		oracleLogCntrl:    NewOracleController(),
-		minSeverity:       logger.SevInfo,
+		SettsChan: make(chan chief_settings.LoggerSettings, 1),
+		//ChannelStatesChan: make(chan channel_state.ChannelState, 100),
+		oracleLogCntrl: NewOracleController(),
+		minSeverity:    logger.SevInfo,
 	}
 }
 
@@ -57,10 +56,10 @@ func (l *ChiefLogger) Work() {
 			}
 
 		case oraLoggerState := <-l.oracleLogCntrl.StateChan:
-			heartbeat.SetLoggerState(oraLoggerState)
+			chief_state.SetLoggerState(oraLoggerState)
 
-		case channelState := <-l.ChannelStatesChan:
-			l.oracleLogCntrl.ChannelStatesChan <- channelState
+			// case channelState := <-l.ChannelStatesChan:
+			// 	l.oracleLogCntrl.ChannelStatesChan <- channelState
 		}
 	}
 }

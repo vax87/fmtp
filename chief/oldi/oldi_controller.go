@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/fmtp_logger"
 	"fdps/go_utils/logger"
 	"fdps/utils"
@@ -24,7 +25,7 @@ const (
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
 
-	timeFormat = "2006-01-02 15:04:05"
+	//timeFormat = "2006-01-02 15:04:05"
 )
 
 type oldiClnt struct {
@@ -34,10 +35,8 @@ type oldiClnt struct {
 
 // OldiController контроллер для работы с провайдером OLDI
 type OldiController struct {
-	ProviderSettsChan  chan []fdps.ProviderSettings // канал для приема настроек провайдеров
-	ProviderSetts      []fdps.ProviderSettings      // текущие настройки провайдеров
-	ProviderStatesChan chan []fdps.ProviderState    // канал для передачи состояний провайдеров
-	ProviderStates     []fdps.ProviderState         // текущее состояние провайдеров
+	ProviderSettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
+	ProviderSetts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
 
 	FromOldiDataChan chan []byte // канал для приема сообщений от провайдера OLDI
 	ToOldiDataChan   chan []byte // канал для отправки сообщений провайдеру OLDI
@@ -57,12 +56,11 @@ type OldiController struct {
 // NewOldiController конструктор
 func NewOldiController() *OldiController {
 	return &OldiController{
-		ProviderSettsChan:  make(chan []fdps.ProviderSettings, 10),
-		ProviderStatesChan: make(chan []fdps.ProviderState, 10),
-		FromOldiDataChan:   make(chan []byte, 1024),
-		ToOldiDataChan:     make(chan []byte, 1024),
-		checkStateTicker:   time.NewTicker(stateTickerInt),
-		providerClients:    make(map[net.Conn]oldiClnt),
+		ProviderSettsChan: make(chan []chief_settings.ProviderSettings, 10),
+		FromOldiDataChan:  make(chan []byte, 1024),
+		ToOldiDataChan:    make(chan []byte, 1024),
+		checkStateTicker:  time.NewTicker(stateTickerInt),
+		providerClients:   make(map[net.Conn]oldiClnt),
 	}
 }
 
@@ -120,7 +118,7 @@ func (c *OldiController) stopServer() {
 }
 
 func (c *OldiController) closeClient(conn net.Conn) {
-	if val, ok := c.providerClients[conn]; ok == true {
+	if val, ok := c.providerClients[conn]; ok {
 
 		conn.SetDeadline(time.Now().Add(time.Second))
 		// останавливаем передачу / прием
@@ -141,8 +139,6 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 		default:
 			buffer := make([]byte, 8192)
 			if readBytes, err := clntConn.Read(buffer); err != nil {
-				// chief_logger.ChiefLog.FmtpLogChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
-				// 	fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err))
 				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err)))
 
@@ -176,8 +172,6 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 			}
 
 			if _, err := clntConn.Write(dataToSend); err != nil {
-				// chief_logger.ChiefLog.FmtpLogChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
-				// 	fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err))
 				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err)))
 				c.closeClient(clntConn)
@@ -197,20 +191,21 @@ func (c *OldiController) Work() {
 		case curSetts := <-c.ProviderSettsChan:
 			c.ProviderSetts = curSetts
 
-			var permitIPs []string
+			//var permitIPs []string
 			var localPort int
 			for _, val := range c.ProviderSetts {
 				localPort = val.LocalPort
-				for _, ipVal := range val.IPAddresses {
-					permitIPs = append(permitIPs, ipVal)
-				}
+				//permitIPs = append(permitIPs, val.IPAddresses...)
+				// for _, ipVal := range val.IPAddresses {
+				// 	permitIPs = append(permitIPs, ipVal)
+				// }
 				c.providerEncoding = val.ProviderEncoding
 			}
 
 			if c.tcpLocalPort != localPort {
 				c.tcpLocalPort = localPort
 
-				if c.tcpListenerWork == true {
+				if c.tcpListenerWork {
 					c.stopServer()
 				}
 				var ctx context.Context
@@ -228,27 +223,27 @@ func (c *OldiController) Work() {
 
 		// сработал тикер проверки состояния контроллера
 		case <-c.checkStateTicker.C:
-			var states []fdps.ProviderState
+			var states []chief_state.ProviderState
 
 			for _, val := range c.ProviderSetts {
-				curState := fdps.ProviderState{
+				curState := chief_state.ProviderState{
 					ProviderID:    val.ID,
 					ProviderType:  val.DataType,
 					ProviderIPs:   val.IPAddresses,
-					ProviderState: fdps.ProviderStateError,
+					ProviderState: chief_state.StateError,
 				}
 
 				for _, ipVal := range val.IPAddresses {
 					for key := range c.providerClients {
 						if strings.HasPrefix(key.RemoteAddr().String(), ipVal) {
-							curState.ProviderState = fdps.ProviderStateOk
+							curState.ProviderState = chief_state.StateOk
 							curState.ClientAddresses += " " + key.RemoteAddr().String()
 						}
 					}
 				}
 				states = append(states, curState)
 			}
-			c.ProviderStatesChan <- states
+			chief_state.SetOldiProviderState(states)
 		}
 	}
 }

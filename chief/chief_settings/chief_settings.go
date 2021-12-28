@@ -7,12 +7,36 @@ import (
 	"os"
 
 	"fdps/fmtp/channel/channel_settings"
-	log_set "fdps/fmtp/chief/chief_logger/settings"
-	"fdps/fmtp/chief/fdps"
 	"fdps/utils"
 )
 
-// Settings настройки контроллера(chief)
+const (
+	AODBProvider = "AODB"
+	OLDIProvider = "OLDI"
+)
+
+type ProviderSettings struct {
+	ID               int      `json:"ProviderID"`     // идентификатор провайдера
+	IPAddresses      []string `json:"ProviderIPs"`    // список IP адресов провайдера
+	Status           string   `json:"ProviderStatus"` // статус работы провайдера (primary/secondary) - не используется
+	DataType         string   `json:"ProviderType"`   // тип данных поверх FMTP ("AODB" | "OLDI")
+	ProviderEncoding string   // кодировка сообщений при общении с провайдером OLDI ("Windows-1251" | "UTF-8")
+	LocalPort        int      // сетевой порт (заполняется из общей структуры настроек)
+}
+
+type LoggerSettings struct {
+	FileSizeKB         int    `json:"FileSizeKB"`
+	FolderSizeGB       int    `json:"FolderSizeGB"`
+	LoggerPort         int    `json:"LoggerPort"`
+	DbServiceName      string `json:"DbServiceName"`
+	DbHostname         string `json:"DbHostname"`
+	DbMaxLogStoreCount int    `json:"DbMaxLogStoreCount`
+	DbPassword         string `json:"DbPassword"`
+	DbPort             int    `json:"DbPort"`
+	DbStoreDays        int    `json:"DbStoreDays"`
+	DbUser             string `json:"DbUser"`
+}
+
 type ChiefSettings struct {
 	IPAddr               string `json:"ControllerIP"`         // IP адрес контроллера
 	CntrlID              int    `json:"ControllerID"`         // идентификатор контроллера
@@ -23,9 +47,9 @@ type ChiefSettings struct {
 	AodbProviderPort     int    `json:"AodbProviderPort"`     // TCP порт для связи с плановым сервисом (AODB).
 	DockerRegistry       string `json:"DockerRegistry"`       // репозиторий с docker образами каналовы
 
-	LoggerSetts    log_set.LoggerSettings             `json:"LoggerSettings"`
+	LoggerSetts    LoggerSettings                     `json:"LoggerSettings"`
 	ChannelSetts   []channel_settings.ChannelSettings `json:"FmtpDaemons"`
-	ProvidersSetts []fdps.ProviderSettings            `json:"Providers"`
+	ProvidersSetts []ProviderSettings                 `json:"Providers"`
 	IsInitialised  bool                               `json:"-"` // признак инициализации настроек (либо получены от конфигуратора, либо считаны из файла)
 }
 

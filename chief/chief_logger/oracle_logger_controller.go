@@ -11,7 +11,9 @@ import (
 	"github.com/phf/go-queue/queue"
 
 	"fdps/fmtp/channel/channel_state"
-	log_state "fdps/fmtp/chief/chief_logger/state"
+	"fdps/fmtp/chief/chief_state"
+
+	//log_state "fdps/fmtp/chief/chief_logger/state"
 	"fdps/fmtp/fmtp_logger"
 	"fdps/go_utils/logger"
 )
@@ -27,8 +29,8 @@ const (
 	dbLastCountCheckKey = "Время последней проверки кол-ва хранимых логов (UTC):"
 	dbLastSizeCheckKey  = "Время последней проверки времени хранения логов (UTC):"
 
-	dbStateOkValue    = "Подключено."    // значение параметра для подключенного состояния
-	dbStateErrorValue = "Не подключено." // значение параметра для не подключенного состояния
+	//dbStateOkValue    = "Подключено."    // значение параметра для подключенного состояния
+	//dbStateErrorValue = "Не подключено." // значение параметра для не подключенного состояния
 
 	timeFormat = "2006-01-02 15:04:05"
 
@@ -38,16 +40,44 @@ const (
 	onlineLogMaxCount = 1000  // кол-во хранимых логов в таблице онлайн сообщений
 )
 
+/*
+запись состояния канала в БД
+убрал из worker
+
+
+// 	for _, curVal := range curChannelStates {
+
+		// 		foundState := false
+		// 		for chIdx, chVal := range channelStates {
+		// 			if chVal.LocalName == curVal.LocalName && chVal.RemoteName == curVal.RemoteName {
+
+		// 				foundState = true
+
+		// 				if chVal.DaemonState != curVal.DaemonState ||
+		// 					chVal.FmtpState != curVal.FmtpState {
+
+		// 					channelStates[chIdx] = curVal
+		// 					chief_logger.ChiefLog.ChannelStatesChan <- curVal
+		// 				}
+		// 			}
+		// 		}
+		// 		if !foundState {
+		// 			channelStates = append(channelStates, curVal)
+		// 			chief_logger.ChiefLog.ChannelStatesChan <- curVal
+		// 		}
+		// 	}
+
+*/
 // контроллер, выполняющий запись логов в БД
 type OracleLoggerController struct {
-	SettingsChan       chan OracleLoggerSettings   // канал приема новых настроек контроллера
-	MessChan           chan fmtp_logger.LogMessage // канал приема новых сообщений
-	StateChan          chan log_state.LoggerState  // канал отправки состояния подключения к БД
-	ChannelStatesChan  chan channel_state.ChannelState
+	SettingsChan chan OracleLoggerSettings    // канал приема новых настроек контроллера
+	MessChan     chan fmtp_logger.LogMessage  // канал приема новых сообщений
+	StateChan    chan chief_state.LoggerState // канал отправки состояния подключения к БД
+	//ChannelStatesChan  chan channel_state.ChannelState
 	ChannelStatesQueue queue.Queue
 
 	currentSettings OracleLoggerSettings
-	closeChan       chan struct{} // канал для передачи сигнала закрытия подключения к БД.
+	//closeChan       chan struct{} // канал для передачи сигнала закрытия подключения к БД.
 
 	logQueue queue.Queue // очередь сообщений для записи в БД
 
@@ -69,8 +99,8 @@ type OracleLoggerController struct {
 	connectDbTicker   *time.Ticker // тикер подключения к БД
 
 	curInsertCount uint64 // кол-во выполнненых запросов INSERT (для проверки кол-ва хранимых логов)
-	curDbErrorText string // текст текущей ошибки при работе с БД
-	lastQueryText  string // текст последнего запроса (при возникновении ошибки при упешном подключении выполнить еще раз)
+	//curDbErrorText string // текст текущей ошибки при работе с БД
+	lastQueryText string // текст последнего запроса (при возникновении ошибки при упешном подключении выполнить еще раз)
 }
 
 // конструктор
@@ -82,8 +112,8 @@ func NewOracleController() *OracleLoggerController {
 func (rlc *OracleLoggerController) Init() *OracleLoggerController {
 	rlc.MessChan = make(chan fmtp_logger.LogMessage, 1024)
 	rlc.SettingsChan = make(chan OracleLoggerSettings)
-	rlc.StateChan = make(chan log_state.LoggerState, 1)
-	rlc.ChannelStatesChan = make(chan channel_state.ChannelState, 100)
+	rlc.StateChan = make(chan chief_state.LoggerState, 1)
+	//rlc.ChannelStatesChan = make(chan channel_state.ChannelState, 100)
 
 	rlc.canExecute = false
 	rlc.needCheckLogCount = true
@@ -120,9 +150,9 @@ func (rlc *OracleLoggerController) Run() {
 					//if rlc.currentSettings.NeedWork {
 					curErr := rlc.connectToDb()
 					if curErr != nil {
-						rlc.StateChan <- log_state.LoggerState{
-							LoggerConnected:   log_state.LoggerStateOk,
-							LoggerDbConnected: log_state.LoggerStateError,
+						rlc.StateChan <- chief_state.LoggerState{
+							LoggerConnected:   chief_state.StateOk,
+							LoggerDbConnected: chief_state.StateError,
 							LoggerDbError:     curErr.Error(),
 							LoggerVersion:     "",
 						}
@@ -161,9 +191,9 @@ func (rlc *OracleLoggerController) Run() {
 				} else {
 					rlc.canExecute = true
 				}
-				rlc.StateChan <- log_state.LoggerState{
-					LoggerConnected:   log_state.LoggerStateOk,
-					LoggerDbConnected: log_state.LoggerStateError,
+				rlc.StateChan <- chief_state.LoggerState{
+					LoggerConnected:   chief_state.StateOk,
+					LoggerDbConnected: chief_state.StateError,
 					LoggerDbError:     execErr.Error(),
 					LoggerVersion:     "",
 				}
@@ -180,17 +210,17 @@ func (rlc *OracleLoggerController) Run() {
 				curErr := rlc.heartbeat()
 
 				if curErr != nil {
-					rlc.StateChan <- log_state.LoggerState{
-						LoggerConnected:   log_state.LoggerStateOk,
-						LoggerDbConnected: log_state.LoggerStateError,
+					rlc.StateChan <- chief_state.LoggerState{
+						LoggerConnected:   chief_state.StateOk,
+						LoggerDbConnected: chief_state.StateError,
 						LoggerDbError:     curErr.Error(),
 						LoggerVersion:     "",
 					}
 				} else {
 
-					rlc.StateChan <- log_state.LoggerState{
-						LoggerConnected:   log_state.LoggerStateOk,
-						LoggerDbConnected: log_state.LoggerStateOk,
+					rlc.StateChan <- chief_state.LoggerState{
+						LoggerConnected:   chief_state.StateOk,
+						LoggerDbConnected: chief_state.StateOk,
 						LoggerDbError:     "",
 						LoggerVersion:     "",
 					}
@@ -202,16 +232,16 @@ func (rlc *OracleLoggerController) Run() {
 			if !rlc.dbSuccess { //&& rlc.currentSettings.NeedWork {
 				curErr := rlc.connectToDb()
 				if curErr != nil {
-					rlc.StateChan <- log_state.LoggerState{
-						LoggerConnected:   log_state.LoggerStateOk,
-						LoggerDbConnected: log_state.LoggerStateError,
+					rlc.StateChan <- chief_state.LoggerState{
+						LoggerConnected:   chief_state.StateOk,
+						LoggerDbConnected: chief_state.StateError,
 						LoggerDbError:     curErr.Error(),
 						LoggerVersion:     "",
 					}
 				} else {
-					rlc.StateChan <- log_state.LoggerState{
-						LoggerConnected:   log_state.LoggerStateOk,
-						LoggerDbConnected: log_state.LoggerStateOk,
+					rlc.StateChan <- chief_state.LoggerState{
+						LoggerConnected:   chief_state.StateOk,
+						LoggerDbConnected: chief_state.StateOk,
 						LoggerDbError:     "",
 						LoggerVersion:     "",
 					}
@@ -223,8 +253,8 @@ func (rlc *OracleLoggerController) Run() {
 			rlc.needCheckLogLifetime = true
 
 			// пришло изменение состояния канала
-		case chState := <-rlc.ChannelStatesChan:
-			rlc.ChannelStatesQueue.PushBack(chState)
+			// case chState := <-rlc.ChannelStatesChan:
+			// 	rlc.ChannelStatesQueue.PushBack(chState)
 		}
 	}
 }

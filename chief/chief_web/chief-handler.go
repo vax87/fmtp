@@ -2,7 +2,8 @@ package chief_web
 
 import (
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_state"
 	"fmt"
 	"net/http"
 	"sort"
@@ -40,46 +41,52 @@ func InitChiefChannelsHandler(handleURL string, title string) {
 }
 
 func (cw *ChiefHandler) handlerMain(w http.ResponseWriter, r *http.Request) {
-	for idx, nn := range srv.chiefPage.ChannelStates {
-		switch nn.DaemonState {
+	srv.chiefPage.ChannelStates = srv.chiefPage.ChannelStates[:0]
+
+	for _, val := range chief_state.CommonChiefState.ChannelStates {
+		channel_st := val
+
+		switch val.DaemonState {
 		case channel_state.ChannelStateStopped:
-			srv.chiefPage.ChannelStates[idx].StateColor = StopColor
+			channel_st.StateColor = StopColor
 		case channel_state.ChannelStateError:
-			srv.chiefPage.ChannelStates[idx].StateColor = ErrorColor
+			channel_st.StateColor = ErrorColor
 		case channel_state.ChannelStateOk:
-			srv.chiefPage.ChannelStates[idx].StateColor = OkColor
+			channel_st.StateColor = OkColor
 		default:
-			srv.chiefPage.ChannelStates[idx].StateColor = DefaultColor
+			channel_st.StateColor = DefaultColor
 		}
+		srv.chiefPage.ChannelStates = append(srv.chiefPage.ChannelStates, channel_st)
 	}
 	sort.Slice(srv.chiefPage.ChannelStates, func(i, j int) bool {
 		return srv.chiefPage.ChannelStates[i].ChannelID < srv.chiefPage.ChannelStates[j].ChannelID
 	})
 
-	for idx, nn := range srv.chiefPage.AodbProviderStates {
-		switch nn.ProviderState {
-		case fdps.ProviderStateOk:
-			srv.chiefPage.AodbProviderStates[idx].StateColor = OkColor
-		case fdps.ProviderStateError:
-			srv.chiefPage.AodbProviderStates[idx].StateColor = ErrorColor
+	srv.chiefPage.AodbProviderStates = srv.chiefPage.AodbProviderStates[:0]
+	srv.chiefPage.OldiProviderStates = srv.chiefPage.OldiProviderStates[:0]
+	for _, val := range chief_state.CommonChiefState.ProviderStates {
+		provider_st := val
+
+		switch val.ProviderState {
+		case chief_state.StateOk:
+			provider_st.StateColor = OkColor
+		case chief_state.StateError:
+			provider_st.StateColor = ErrorColor
 		default:
-			srv.chiefPage.AodbProviderStates[idx].StateColor = DefaultColor
+			provider_st.StateColor = DefaultColor
 		}
+
+		if val.ProviderType == chief_settings.OLDIProvider {
+			srv.chiefPage.OldiProviderStates = append(srv.chiefPage.OldiProviderStates, provider_st)
+		} else {
+			srv.chiefPage.AodbProviderStates = append(srv.chiefPage.AodbProviderStates, provider_st)
+		}
+
 	}
 	sort.Slice(srv.chiefPage.AodbProviderStates, func(i, j int) bool {
 		return srv.chiefPage.AodbProviderStates[i].ProviderID < srv.chiefPage.AodbProviderStates[j].ProviderID
 	})
 
-	for idx, nn := range srv.chiefPage.OldiProviderStates {
-		switch nn.ProviderState {
-		case fdps.ProviderStateOk:
-			srv.chiefPage.OldiProviderStates[idx].StateColor = OkColor
-		case fdps.ProviderStateError:
-			srv.chiefPage.OldiProviderStates[idx].StateColor = ErrorColor
-		default:
-			srv.chiefPage.OldiProviderStates[idx].StateColor = DefaultColor
-		}
-	}
 	sort.Slice(srv.chiefPage.OldiProviderStates, func(i, j int) bool {
 		return srv.chiefPage.OldiProviderStates[i].ProviderID < srv.chiefPage.OldiProviderStates[j].ProviderID
 	})

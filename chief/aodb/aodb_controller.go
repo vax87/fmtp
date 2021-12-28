@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"fdps/fmtp/chief/fdps"
+	"fdps/fmtp/chief/chief_settings"
+	"fdps/fmtp/chief/chief_state"
 	"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
 	"fdps/utils"
@@ -15,23 +16,15 @@ const stateTickerInt = time.Second
 
 const (
 	srvStateKey = "AODB WS. Состояние:"
-	// srvLastConnKey    = "AODB WS. Последнее клиентское подключение:"
-	// srvLastDisconnKey = "AODB WS. Последнее клиентское отключение:"
-	// srvLastErrKey     = "AODB WS. Последняя ошибка:"
-	//srvClntListKey    = "AODB WS. Список клиентов:"
 
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
-
-	timeFormat = "2006-01-02 15:04:05"
 )
 
 // Controller контроллер для работы с провайдером AODB
 type Controller struct {
-	ProviderSettsChan  chan []fdps.ProviderSettings // канал для приема настроек провайдеров
-	ProviderSetts      []fdps.ProviderSettings      // текущие настройки провайдеров
-	ProviderStatesChan chan []fdps.ProviderState    // канал для передачи состояний провайдеров
-	ProviderStates     []fdps.ProviderState         // текущее состояние провайдеров
+	ProviderSettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
+	ProviderSetts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
 
 	FromAODBDataChan chan []byte // канал для приема сообщений от провайдера AODB
 	ToAODBDataChan   chan []byte // канал для отправки сообщений провайдеру AODB
@@ -44,12 +37,11 @@ type Controller struct {
 // NewController конструктор
 func NewController(done chan struct{}) *Controller {
 	return &Controller{
-		ProviderSettsChan:  make(chan []fdps.ProviderSettings, 10),
-		ProviderStatesChan: make(chan []fdps.ProviderState, 10),
-		FromAODBDataChan:   make(chan []byte, 1024),
-		ToAODBDataChan:     make(chan []byte, 1024),
-		wsServer:           web_sock.NewWebSockServer(done),
-		checkStateTicker:   time.NewTicker(stateTickerInt),
+		ProviderSettsChan: make(chan []chief_settings.ProviderSettings, 10),
+		FromAODBDataChan:  make(chan []byte, 1024),
+		ToAODBDataChan:    make(chan []byte, 1024),
+		wsServer:          web_sock.NewWebSockServer(done),
+		checkStateTicker:  time.NewTicker(stateTickerInt),
 	}
 }
 
@@ -118,27 +110,27 @@ func (c *Controller) Work() {
 
 		// сработал тикер проверки состояния контроллера
 		case <-c.checkStateTicker.C:
-			var states []fdps.ProviderState
+			var states []chief_state.ProviderState
 
 			for _, val := range c.ProviderSetts {
-				curState := fdps.ProviderState{
+				curState := chief_state.ProviderState{
 					ProviderID:    val.ID,
 					ProviderType:  val.DataType,
 					ProviderIPs:   val.IPAddresses,
-					ProviderState: fdps.ProviderStateError,
+					ProviderState: chief_state.StateError,
 				}
 
 			IPLBL:
 				for _, ipVal := range val.IPAddresses {
 					if c.wsServer.IsIPConnected(ipVal) {
-						curState.ProviderState = fdps.ProviderStateOk
+						curState.ProviderState = chief_state.StateOk
 						curState.ProviderURL = fmt.Sprintf("http://%s:8888", ipVal)
 						break IPLBL
 					}
 				}
 				states = append(states, curState)
 			}
-			c.ProviderStatesChan <- states
+			chief_state.SetAodbProviderState(states)
 		}
 	}
 }

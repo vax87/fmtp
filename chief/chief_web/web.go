@@ -1,8 +1,6 @@
 package chief_web
 
 import (
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/fdps"
 	"fdps/fmtp/chief_configurator/configurator_urls"
 	"fdps/utils"
 	"fmt"
@@ -13,11 +11,11 @@ import (
 
 type httpServer struct {
 	http.Server
-	shutdownReq chan bool
-	done        chan struct{}
-	reqCount    uint32
-	configPage  *ConfigPage
-	chiefPage   *ChiefPage
+	//shutdownReq chan bool
+	done chan struct{}
+	//reqCount    uint32
+	configPage *ConfigPage
+	chiefPage  *ChiefPage
 }
 
 var srv httpServer
@@ -69,16 +67,16 @@ func SetUrlConfig(urlConfig configurator_urls.ConfiguratorUrls) {
 }
 
 // SetChannelStates - задать состояния FMTP каналов
-func SetChannelStates(states []channel_state.ChannelState) {
-	srv.chiefPage.ChannelStates = states
-}
+// func SetChannelStates(states []channel_state.ChannelState) {
+// 	srv.chiefPage.ChannelStates = states
+// }
 
 // SetOldiProviderStates - задать состояния провайдеров OLDI
-func SetOldiProviderStates(states []fdps.ProviderState) {
-	srv.chiefPage.OldiProviderStates = states
-}
+// func SetOldiProviderStates(states []chief_state.ProviderState) {
+// 	srv.chiefPage.OldiProviderStates = states
+// }
 
 // SetAodbProviderStates - задать состояния провайдеров AODB
-func SetAodbProviderStates(states []fdps.ProviderState) {
-	srv.chiefPage.AodbProviderStates = states
-}
+// func SetAodbProviderStates(states []chief_state.ProviderState) {
+// 	srv.chiefPage.AodbProviderStates = states
+// }

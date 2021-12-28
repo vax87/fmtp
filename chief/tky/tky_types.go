@@ -1,13 +1,10 @@
 package tky
 
-// StateForTky -
 type StateForTky struct {
-	//vendor, product string
 	DaemonStates   []DaemonState
 	ProviderStates []ProviderState
 }
 
-// DaemonState -
 type DaemonState struct {
 	DaemonID    int
 	LocalName   string
@@ -17,7 +14,6 @@ type DaemonState struct {
 	FmtpState   string
 }
 
-// ProviderState -
 type ProviderState struct {
 	ProviderID           int
 	ProviderType         string
