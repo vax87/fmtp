@@ -24,8 +24,6 @@ const (
 
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
-
-	//timeFormat = "2006-01-02 15:04:05"
 )
 
 type oldiClnt struct {
@@ -188,17 +186,10 @@ func (c *OldiController) Work() {
 	for {
 		select {
 		// получены новые настройки каналов
-		case curSetts := <-c.ProviderSettsChan:
-			c.ProviderSetts = curSetts
-
-			//var permitIPs []string
+		case c.ProviderSetts = <-c.ProviderSettsChan:
 			var localPort int
 			for _, val := range c.ProviderSetts {
 				localPort = val.LocalPort
-				//permitIPs = append(permitIPs, val.IPAddresses...)
-				// for _, ipVal := range val.IPAddresses {
-				// 	permitIPs = append(permitIPs, ipVal)
-				// }
 				c.providerEncoding = val.ProviderEncoding
 			}
 

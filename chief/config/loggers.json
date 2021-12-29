@@ -1,5 +1,5 @@
 {
-	"NeedStdLog": true,
+	"NeedStdLog": false,
 	"NeedLjackLog": true,
 	"NeedWebLog": true,
 	"StdLfileFlag ": false,

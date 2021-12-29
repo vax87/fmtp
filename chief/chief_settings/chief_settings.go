@@ -97,3 +97,15 @@ func (s *ChiefSettings) ChannelDataTypeById(idChan int) string {
 	}
 	return "OLDI"
 }
+
+// ProviderSettings настройки провайдеров по типу
+func (s *ChiefSettings) ProviderSettings(providerType string) []ProviderSettings {
+	var retSetts []ProviderSettings
+
+	for _, val := range s.ProvidersSetts {
+		if val.DataType == providerType {
+			retSetts = append(retSetts, val)
+		}
+	}
+	return retSetts
+}

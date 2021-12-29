@@ -1,7 +1,6 @@
 package chief_logger
 
 import (
-	"database/sql"
 	"fmt"
 
 	"fdps/fmtp/chief_configurator"
@@ -117,10 +116,6 @@ func (l *ChiefLogger) PrintfErr(format string, a ...interface{}) {
 
 // SetDebugParam задать параметр и его значение для отображение в таблице
 func (l *ChiefLogger) SetDebugParam(paramName string, paramVal string, paramColor string) {
-}
-
-// SetDbStats задать параметры состояния БД
-func (l *ChiefLogger) SetDbStats(dbStat sql.DBStats) {
 }
 
 // SetMinSeverity задать серъезность, начиная с которой будут вестись логи

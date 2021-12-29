@@ -52,16 +52,12 @@ func (c *Controller) Work() {
 	for {
 		select {
 		// получены новые настройки каналов
-		case curSetts := <-c.ProviderSettsChan:
-			c.ProviderSetts = curSetts
-
+		case c.ProviderSetts = <-c.ProviderSettsChan:
 			var permitIPs []string
 			var localPort int
 			for _, val := range c.ProviderSetts {
 				localPort = val.LocalPort
-				for _, ipVal := range val.IPAddresses {
-					permitIPs = append(permitIPs, ipVal)
-				}
+				permitIPs = append(permitIPs, val.IPAddresses...)
 			}
 
 			c.wsServerSetts = web_sock.WebSockServerSettings{
@@ -76,14 +72,10 @@ func (c *Controller) Work() {
 		// получен подключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntConnChan:
 			logger.PrintfDebug("Подключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
-			//logger.SetDebugParam(srvLastConnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
-			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отключенный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntDisconnChan:
 			logger.PrintfDebug("Отключен клиент AODB с адресом: %s.", curClnt.RemoteAddr().String())
-			//logger.SetDebugParam(srvLastDisconnKey, curClnt.RemoteAddr().String()+" "+time.Now().Format(timeFormat), logger.StateDefaultColor)
-			//logger.SetDebugParam(srvClntListKey, fmt.Sprintf("%v", c.wsServer.ClientList()), logger.StateDefaultColor)
 
 		// получен отклоненный клиент от WS сервера
 		case curClnt := <-c.wsServer.ClntRejectChan:
@@ -92,7 +84,6 @@ func (c *Controller) Work() {
 		// получена ошибка от WS сервера
 		case wsErr := <-c.wsServer.ErrorChan:
 			logger.PrintfErr("Возникла ошибка при работе WS сервера AODB. Ошибка: %s.", wsErr.Error())
-			//logger.SetDebugParam(srvLastErrKey, wsErr.Error(), logger.StateErrorColor)
 
 		// получены данные от WS сервера
 		case curWsPkg := <-c.wsServer.ReceiveDataChan:

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/chief/chief_web"
@@ -36,9 +35,10 @@ type httpResult struct {
 // клиент контроллера для подключения к конфигуратору
 type ChiefConfiguratorClient struct {
 	configUrls           configurator_urls.ConfiguratorUrls
-	FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
-	LoggerSettsChan      chan chief_settings.LoggerSettings            // канал для передачи настроек логгера
-	ProviderSettsChan    chan []chief_settings.ProviderSettings        // канал для передачи натроек провайдеров
+	ChiefSettChangedChan chan struct{}
+	//FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
+	//LoggerSettsChan      chan chief_settings.LoggerSettings            // канал для передачи настроек логгера
+	//ProviderSettsChan    chan []chief_settings.ProviderSettings        // канал для передачи натроек провайдеров
 
 	postResultChan chan httpResult
 
@@ -54,9 +54,10 @@ type ChiefConfiguratorClient struct {
 // NewChiefClient конструктор клиента
 func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
-		FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort, 1),
-		LoggerSettsChan:        make(chan chief_settings.LoggerSettings, 1),
-		ProviderSettsChan:      make(chan []chief_settings.ProviderSettings, 1),
+		ChiefSettChangedChan: make(chan struct{}),
+		// FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort, 1),
+		// LoggerSettsChan:        make(chan chief_settings.LoggerSettings, 1),
+		// ProviderSettsChan:      make(chan []chief_settings.ProviderSettings, 1),
 		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
@@ -261,13 +262,13 @@ func (cc *ChiefConfiguratorClient) sendSettings() {
 	}
 
 	// отправляем настройки каналов
-	cc.FmtpChannelSettsChan <- channel_settings.ChannelSettingsWithPort{
-		ChSettings: ChiefCfg.ChannelSetts,
-		ChPort:     ChiefCfg.ChannelsPort,
-	}
+	// cc.FmtpChannelSettsChan <- channel_settings.ChannelSettingsWithPort{
+	// 	ChSettings: ChiefCfg.ChannelSetts,
+	// 	ChPort:     ChiefCfg.ChannelsPort,
+	// }
 
 	// отправляем настройки логгера
-	cc.LoggerSettsChan <- ChiefCfg.LoggerSetts
+	//cc.LoggerSettsChan <- ChiefCfg.LoggerSetts
 
 	// выставляем кодировку сообщений для OLDI провайдеров
 	for idx, val := range ChiefCfg.ProvidersSetts {
@@ -284,7 +285,8 @@ func (cc *ChiefConfiguratorClient) sendSettings() {
 			ChiefCfg.ProvidersSetts[ind].LocalPort = ChiefCfg.OldiProviderPort
 		}
 	}
-	cc.ProviderSettsChan <- ChiefCfg.ProvidersSetts
+	//cc.ProviderSettsChan <- ChiefCfg.ProvidersSetts
+	cc.ChiefSettChangedChan <- struct{}{}
 
 	chief_state.CommonChiefState.CntrlID = ChiefCfg.CntrlID
 	chief_state.CommonChiefState.IPAddr = ChiefCfg.IPAddr

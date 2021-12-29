@@ -1,6 +1,7 @@
 package chief_worker
 
 import (
+	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/aodb"
 	"fdps/fmtp/chief/chief_logger"
 	"fdps/fmtp/chief/chief_settings"
@@ -44,28 +45,18 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 
 	for {
 		select {
-		// получены настройки каналов
-		case channelSetts := <-chiefConfClient.FmtpChannelSettsChan:
-			channelCntrl.ChannelSettsChan <- channelSetts
 
-		// получены настройки логгера
-		case loggerSetts := <-chiefConfClient.LoggerSettsChan:
-			chief_logger.ChiefLog.SettsChan <- loggerSetts
-
-		// получены настройки провайера AODB
-		case providerSetts := <-chiefConfClient.ProviderSettsChan:
-			var aodbSettings, oldiSettings []chief_settings.ProviderSettings
-
-			for _, val := range providerSetts {
-				if val.DataType == chief_settings.AODBProvider {
-					aodbSettings = append(aodbSettings, val)
-				} else if val.DataType == chief_settings.OLDIProvider {
-					oldiSettings = append(oldiSettings, val)
-				}
+		// настройки контроллера изменены
+		case <-chiefConfClient.ChiefSettChangedChan:
+			channelCntrl.ChannelSettsChan <- channel_settings.ChannelSettingsWithPort{
+				ChSettings: chief_configurator.ChiefCfg.ChannelSetts,
+				ChPort:     chief_configurator.ChiefCfg.ChannelsPort,
 			}
-			aodbCntrl.ProviderSettsChan <- aodbSettings
 
-			oldiCntrl.ProviderSettsChan <- oldiSettings
+			aodbCntrl.ProviderSettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.AODBProvider)
+			oldiCntrl.ProviderSettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.OLDIProvider)
+
+			chief_logger.ChiefLog.SettsChan <- chief_configurator.ChiefCfg.LoggerSetts
 
 		// получены данные от провайдера AODB
 		case aodbData := <-aodbCntrl.FromAODBDataChan:

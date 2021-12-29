@@ -32,7 +32,7 @@ func initDockerInfo() bool {
 }
 
 func main() {
-	logger.InitLoggerSettings(utils.AppPath()+"/config/local_logger.json", appName, appVersion)
+	logger.InitLoggerSettings(utils.AppPath()+"/config/loggers.json", appName, appVersion)
 	if logger.LogSettInst.NeedWebLog {
 		utils.AppendHandler(logger.WebLogger)
 	}
