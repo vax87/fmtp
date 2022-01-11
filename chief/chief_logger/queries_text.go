@@ -23,7 +23,7 @@ func oraCheckLogCountQuery(maxOnlineCount int, maxStorageCount int) string {
 }
 
 // текст запроса удаления сообщений старше dateTimeString.
-func oraCheckLogLifetimeQuery(dateTimeString string) string {
+func oraCheckLogLivetimeQuery(dateTimeString string) string {
 	return fmt.Sprintf("BEGIN LOG_PROC_PKG.CHECK_LOG_LIFETIME('%s'); COMMIT; END;", dateTimeString)
 }
 
@@ -42,14 +42,11 @@ func oraUpdateChannelStateQuery(chState channel_state.ChannelState) string {
 	return queryStr.String()
 }
 
-// текст начала запроса добавления сообщений в БД.
-func oraInsertLogBeginQuery(queryText *string, logMessage fmtp_logger.LogMessage) {
+// текст запроса добавления сообщения журнала в БД.
+func oraInsertLogQuery(logMessage fmtp_logger.LogMessage) string {
+	queryText := "INSERT ALL "
 
-	if *queryText == "" {
-		*queryText += "INSERT ALL "
-	}
-
-	*queryText += fmt.Sprintf(`INTO %s
+	queryText += fmt.Sprintf(`INTO %s
 		 (CntrlIP, DaemonID, LocalName, RemoteName, DataType, Source, Severity, FmtpType, Direction, DateTime, Text)
 		 VALUES ('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s') `,
 		onlineLogTableName,
@@ -65,7 +62,7 @@ func oraInsertLogBeginQuery(queryText *string, logMessage fmtp_logger.LogMessage
 		logMessage.DateTime,
 		logMessage.Text)
 
-	*queryText += fmt.Sprintf(`INTO %s 
+	queryText += fmt.Sprintf(`INTO %s 
 		(CntrlIP, DaemonID, LocalName, RemoteName, DataType, Source, Severity, FmtpType, Direction, DateTime, Text) 
 		VALUES ('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s') `,
 		storageLogTableName,
@@ -80,9 +77,13 @@ func oraInsertLogBeginQuery(queryText *string, logMessage fmtp_logger.LogMessage
 		logMessage.Direction,
 		logMessage.DateTime,
 		logMessage.Text)
+
+	queryText += " SELECT 1 FROM dual"
+
+	return queryText
 }
 
-// текст окончания запроса добавления сообщений в БД.
-func oraInsertLogEndQuery(queryText *string) {
-	*queryText += " SELECT 1 FROM dual"
-}
+// // текст окончания запроса добавления сообщений в БД.
+// func oraInsertLogEndQuery(queryText *string) {
+// 	*queryText += " SELECT 1 FROM dual"
+// }

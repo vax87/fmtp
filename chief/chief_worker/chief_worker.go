@@ -58,6 +58,9 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 
 			chief_logger.ChiefLog.SettsChan <- chief_configurator.ChiefCfg.LoggerSetts
 
+		case saveStates := <-chiefConfClient.SaveStatesToDbChan:
+			chief_logger.ChiefLog.SetWriteStatesToDb(saveStates)
+
 		// получены данные от провайдера AODB
 		case aodbData := <-aodbCntrl.FromAODBDataChan:
 			channelCntrl.IncomeAodbPacketChan <- aodbData

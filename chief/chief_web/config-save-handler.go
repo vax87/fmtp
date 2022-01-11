@@ -34,6 +34,10 @@ func saveConfigHandler(w http.ResponseWriter, r *http.Request) {
 	srv.configPage.UrlConfig.SettingsURLStr = r.FormValue("SettingsURLStr")
 	srv.configPage.UrlConfig.HeartbeatURLStr = r.FormValue("HeartbeatURLStr")
 
+	srv.configPage.UrlConfig.WriteStateToDb = false
+	if len(r.Form["WriteStateToDb"]) == 1 {
+		srv.configPage.UrlConfig.WriteStateToDb = r.Form["WriteStateToDb"][0] == "check"
+	}
 	UrlConfigChan <- srv.configPage.UrlConfig
 
 	http.Redirect(w, r, "/"+utils.FmtpChiefWebLogPath, http.StatusFound)

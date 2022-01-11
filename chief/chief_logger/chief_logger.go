@@ -14,16 +14,14 @@ import (
 
 // ChiefLogger логгер, записывающий сообщения в БД
 type ChiefLogger struct {
-	SettsChan chan chief_settings.LoggerSettings
-	//ChannelStatesChan chan channel_state.ChannelState
+	SettsChan      chan chief_settings.LoggerSettings
 	oracleLogCntrl *OracleLoggerController // контроллер записи в БД oracle
 	minSeverity    logger.Severity
 }
 
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
-		SettsChan: make(chan chief_settings.LoggerSettings, 1),
-		//ChannelStatesChan: make(chan channel_state.ChannelState, 100),
+		SettsChan:      make(chan chief_settings.LoggerSettings, 1),
 		oracleLogCntrl: NewOracleController(),
 		minSeverity:    logger.SevInfo,
 	}
@@ -31,20 +29,20 @@ func NewChiefLogger() *ChiefLogger {
 
 var ChiefLog = NewChiefLogger()
 
-func (l *ChiefLogger) Work() {
+func (cl *ChiefLogger) Work() {
 	// свой формат вывода сообщений fmtp в файловый логгер
 	fmtp_logger.SetUserLogFormatForLjack()
 
 	// свой формат вывода логов на web страницу
 	fmtp_logger.SetUserLogFormatForWeb()
 
-	go l.oracleLogCntrl.Run()
+	go cl.oracleLogCntrl.Run()
 
 	for {
 		select {
 
-		case newSetts := <-l.SettsChan:
-			l.oracleLogCntrl.SettingsChan <- OracleLoggerSettings{
+		case newSetts := <-cl.SettsChan:
+			cl.oracleLogCntrl.SettingsChan <- OracleLoggerSettings{
 				Hostname:         newSetts.DbHostname,
 				Port:             newSetts.DbPort,
 				ServiceName:      newSetts.DbServiceName,
@@ -54,16 +52,13 @@ func (l *ChiefLogger) Work() {
 				LogStoreDays:     newSetts.DbStoreDays,
 			}
 
-		case oraLoggerState := <-l.oracleLogCntrl.StateChan:
+		case oraLoggerState := <-cl.oracleLogCntrl.StateChan:
 			chief_state.SetLoggerState(oraLoggerState)
-
-			// case channelState := <-l.ChannelStatesChan:
-			// 	l.oracleLogCntrl.ChannelStatesChan <- channelState
 		}
 	}
 }
 
-func (l *ChiefLogger) processNewLogMsg(severity string, format string, a ...interface{}) {
+func (cl *ChiefLogger) processNewLogMsg(severity string, format string, a ...interface{}) {
 	var fmtpLogMsg fmtp_logger.LogMessage
 	var ok bool
 	if len(a) > 0 {
@@ -76,49 +71,53 @@ func (l *ChiefLogger) processNewLogMsg(severity string, format string, a ...inte
 	}
 	fmtpLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
 
-	l.oracleLogCntrl.MessChan <- fmtpLogMsg
+	cl.oracleLogCntrl.MessChan <- fmtpLogMsg
 }
 
 // Printf реализация интерфейса logger
-func (l *ChiefLogger) Printf(format string, a ...interface{}) {
-	if l.minSeverity <= logger.SevInfo {
-		l.processNewLogMsg(fmtp_logger.SeverityInfo, format, a...)
+func (cl *ChiefLogger) Printf(format string, a ...interface{}) {
+	if cl.minSeverity <= logger.SevInfo {
+		cl.processNewLogMsg(fmtp_logger.SeverityInfo, format, a...)
 	}
 }
 
 // PrintfDebug реализация интерфейса logger
-func (l *ChiefLogger) PrintfDebug(format string, a ...interface{}) {
-	if l.minSeverity <= logger.SevDebug {
-		l.processNewLogMsg(fmtp_logger.SeverityDebug, format, a...)
+func (cl *ChiefLogger) PrintfDebug(format string, a ...interface{}) {
+	if cl.minSeverity <= logger.SevDebug {
+		cl.processNewLogMsg(fmtp_logger.SeverityDebug, format, a...)
 	}
 }
 
 // PrintfInfo реализация интерфейса logger
-func (l *ChiefLogger) PrintfInfo(format string, a ...interface{}) {
-	if l.minSeverity <= logger.SevInfo {
-		l.processNewLogMsg(fmtp_logger.SeverityInfo, format, a...)
+func (cl *ChiefLogger) PrintfInfo(format string, a ...interface{}) {
+	if cl.minSeverity <= logger.SevInfo {
+		cl.processNewLogMsg(fmtp_logger.SeverityInfo, format, a...)
 	}
 }
 
 // PrintfWarn реализация интерфейса logger
-func (l *ChiefLogger) PrintfWarn(format string, a ...interface{}) {
-	if l.minSeverity <= logger.SevWarning {
-		l.processNewLogMsg(fmtp_logger.SeverityWarning, format, a...)
+func (cl *ChiefLogger) PrintfWarn(format string, a ...interface{}) {
+	if cl.minSeverity <= logger.SevWarning {
+		cl.processNewLogMsg(fmtp_logger.SeverityWarning, format, a...)
 	}
 }
 
 // PrintfErr реализация интерфейса logger
-func (l *ChiefLogger) PrintfErr(format string, a ...interface{}) {
-	if l.minSeverity <= logger.SevError {
-		l.processNewLogMsg(fmtp_logger.SeverityError, format, a...)
+func (cl *ChiefLogger) PrintfErr(format string, a ...interface{}) {
+	if cl.minSeverity <= logger.SevError {
+		cl.processNewLogMsg(fmtp_logger.SeverityError, format, a...)
 	}
 }
 
 // SetDebugParam задать параметр и его значение для отображение в таблице
-func (l *ChiefLogger) SetDebugParam(paramName string, paramVal string, paramColor string) {
+func (cl *ChiefLogger) SetDebugParam(paramName string, paramVal string, paramColor string) {
 }
 
 // SetMinSeverity задать серъезность, начиная с которой будут вестись логи
-func (l *ChiefLogger) SetMinSeverity(sev logger.Severity) {
-	l.minSeverity = sev
+func (cl *ChiefLogger) SetMinSeverity(sev logger.Severity) {
+	cl.minSeverity = sev
+}
+
+func (cl *ChiefLogger) SetWriteStatesToDb(writeState bool) {
+	cl.oracleLogCntrl.SetWriteStatesToDb(writeState)
 }

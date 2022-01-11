@@ -24,3 +24,34 @@ type ChannelState struct {
 	ChannelURL  string `json:"ChannelURL"`  // URL web странички канала
 	StateColor  string `json:"-"`
 }
+
+func ChannelStatesEqual(first []ChannelState, second []ChannelState) bool {
+	if first == nil && second != nil {
+		return false
+	}
+
+	if first != nil && second == nil {
+		return false
+	}
+
+	if len(first) != len(second) {
+		return false
+	}
+
+	for _, fV := range first {
+		found := false
+		varEqual := false
+	Loop:
+		for _, sV := range second {
+			if sV.ChannelID == fV.ChannelID {
+				found = true
+				varEqual = sV == fV
+				break Loop
+			}
+		}
+		if !found || !varEqual {
+			return false
+		}
+	}
+	return true
+}

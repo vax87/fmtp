@@ -3,104 +3,93 @@ package chief_logger
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/godror/godror"
-	"github.com/phf/go-queue/queue"
+	"github.com/golang-collections/go-datastructures/queue"
 
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/chief_state"
 
-	//log_state "fdps/fmtp/chief/chief_logger/state"
 	"fdps/fmtp/fmtp_logger"
-	"fdps/go_utils/logger"
 )
 
 const (
-	dbStateKey          = "БД. Состояние подключения:"
-	dbLastConnKey       = "БД. Последнее подключение:"
-	dbLastDisconnKey    = "БД. Последнее отключение:"
-	dbLastErrKey        = "БД. Последняя ошибка:"
-	dbQueueKey          = "Очередь записи (размер / max)"
-	dbCountIncomeKey    = "Кол-во принятых логов с начала работы:"
-	dbInsertCountKey    = "Кол-во записанных логов с начала работы:"
-	dbLastCountCheckKey = "Время последней проверки кол-ва хранимых логов (UTC):"
-	dbLastSizeCheckKey  = "Время последней проверки времени хранения логов (UTC):"
-
-	//dbStateOkValue    = "Подключено."    // значение параметра для подключенного состояния
-	//dbStateErrorValue = "Не подключено." // значение параметра для не подключенного состояния
-
-	timeFormat = "2006-01-02 15:04:05"
-
-	logContainerSize  = 10000 // максимальный размер контейнера с сообщениями
-	oraMaxInsertCount = 1     // максимальное кол-во вставляемых элементов в одном INSERT (oracle)
-	insertCountCheck  = 1000  // кол-во запросов INSERT в БД, после чего следует проверить кол-во хранимых сообщений
-	onlineLogMaxCount = 1000  // кол-во хранимых логов в таблице онлайн сообщений
+	timeFormat        = "2006-01-02 15:04:05"
+	insertCountCheck  = 1000 // кол-во запросов INSERT в БД, после чего следует проверить кол-во хранимых сообщений
+	onlineLogMaxCount = 1000 // кол-во хранимых логов в таблице онлайн сообщений
 )
 
-/*
-запись состояния канала в БД
-убрал из worker
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+func createLoggerState(dbErr error) chief_state.LoggerState {
+	retValue := chief_state.LoggerState{
+		LoggerConnected:   chief_state.StateOk,
+		LoggerDbConnected: chief_state.StateOk,
+		LoggerVersion:     "1.0.0",
+	}
+	if dbErr != nil {
+		retValue.LoggerDbConnected = chief_state.StateError
+		retValue.LoggerDbError = dbErr.Error()
+	}
+	return retValue
+}
 
-// 	for _, curVal := range curChannelStates {
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		// 		foundState := false
-		// 		for chIdx, chVal := range channelStates {
-		// 			if chVal.LocalName == curVal.LocalName && chVal.RemoteName == curVal.RemoteName {
+type queueItem struct {
+	queryText string
+	priority  int
+}
 
-		// 				foundState = true
+func (qi queueItem) Compare(other queue.Item) int {
+	if cast, ok := other.(queueItem); ok {
+		if qi.priority < cast.priority {
+			return 1
+		}
+	}
+	return -1
+}
 
-		// 				if chVal.DaemonState != curVal.DaemonState ||
-		// 					chVal.FmtpState != curVal.FmtpState {
+const (
+	LogPriority = iota
+	CheckLogCountPriority
+	CheckLogLivetimePriority
+	StatesPriority
+)
 
-		// 					channelStates[chIdx] = curVal
-		// 					chief_logger.ChiefLog.ChannelStatesChan <- curVal
-		// 				}
-		// 			}
-		// 		}
-		// 		if !foundState {
-		// 			channelStates = append(channelStates, curVal)
-		// 			chief_logger.ChiefLog.ChannelStatesChan <- curVal
-		// 		}
-		// 	}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-*/
 // контроллер, выполняющий запись логов в БД
 type OracleLoggerController struct {
 	SettingsChan chan OracleLoggerSettings    // канал приема новых настроек контроллера
 	MessChan     chan fmtp_logger.LogMessage  // канал приема новых сообщений
 	StateChan    chan chief_state.LoggerState // канал отправки состояния подключения к БД
-	//ChannelStatesChan  chan channel_state.ChannelState
-	ChannelStatesQueue queue.Queue
 
 	currentSettings OracleLoggerSettings
-	//closeChan       chan struct{} // канал для передачи сигнала закрытия подключения к БД.
 
-	logQueue queue.Queue // очередь сообщений для записи в БД
+	queryQueue *queue.PriorityQueue // очередь сообщений для записи в БД
 
-	needCheckLogCount    bool // необходимость проверить кол-во хранимых логов
-	needCheckLogLifetime bool // необходимость проверить логи на время хранения
+	db         *sql.DB // объект БД
+	dbSuccess  bool    // успешность подключения к БД
+	canExecute bool    // возможность выполнять запросы к БД
 
-	db        *sql.DB // объект БД
-	dbSuccess bool    // успешность подключения к БД
-
-	canExecute bool // возможность выполнять запросы к БД
-
-	execLogQueryChan   chan string   // канал для передачи запросов записи логов на выполнение
-	execCountQueryChan chan struct{} // канал для передачи запросов проверки кол-ва логов на выполнение
-	execResultChan     chan error    // канал для передачи результатов выполнения
-	execTermChan       chan struct{} // канал для завершения подпрограммы выполнения запросов
+	execQueryChan  chan string   // канал для передачи запросов записи логов на выполнение
+	execResultChan chan error    // канал для передачи результатов выполнения
+	execTermChan   chan struct{} // канал для завершения подпрограммы выполнения запросов
 
 	logLifetimeTicker *time.Ticker // тикер проверки времени жизни логов
 	pingDbTicker      *time.Ticker // тикер пинга БД
 	connectDbTicker   *time.Ticker // тикер подключения к БД
 
+	lastChannelStates []channel_state.ChannelState
+	checkStatesTckr   *time.Ticker // тикер записи состояния каналов в БД
+
 	curInsertCount uint64 // кол-во выполнненых запросов INSERT (для проверки кол-ва хранимых логов)
 	//curDbErrorText string // текст текущей ошибки при работе с БД
-	lastQueryText string // текст последнего запроса (при возникновении ошибки при упешном подключении выполнить еще раз)
+	lastQueryText   string // текст последнего запроса (при возникновении ошибки при упешном подключении выполнить еще раз)
+	writeStatesToDb bool
 }
 
 // конструктор
@@ -113,20 +102,21 @@ func (rlc *OracleLoggerController) Init() *OracleLoggerController {
 	rlc.MessChan = make(chan fmtp_logger.LogMessage, 1024)
 	rlc.SettingsChan = make(chan OracleLoggerSettings)
 	rlc.StateChan = make(chan chief_state.LoggerState, 1)
-	//rlc.ChannelStatesChan = make(chan channel_state.ChannelState, 100)
+
+	rlc.queryQueue = queue.NewPriorityQueue(10000)
 
 	rlc.canExecute = false
-	rlc.needCheckLogCount = true
-	rlc.needCheckLogLifetime = true
+	rlc.checkLogCount()
+	rlc.checkLogLivetime()
 
-	rlc.execLogQueryChan = make(chan string, 1)
-	rlc.execCountQueryChan = make(chan struct{}, 1)
+	rlc.execQueryChan = make(chan string, 1)
 	rlc.execResultChan = make(chan error, 1)
 	rlc.execTermChan = make(chan struct{}, 1)
 
 	rlc.pingDbTicker = time.NewTicker(3 * time.Second)
 	rlc.connectDbTicker = time.NewTicker(10 * time.Second)
 	rlc.logLifetimeTicker = time.NewTicker(12 * time.Hour)
+	rlc.checkStatesTckr = time.NewTicker(1 * time.Second)
 
 	return rlc
 }
@@ -138,8 +128,6 @@ func (rlc *OracleLoggerController) Run() {
 		select {
 		case newSettings := <-rlc.SettingsChan:
 
-			logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize), logger.StateDefaultColor)
-
 			if isDbEqual, isStorEqual := rlc.currentSettings.equal(newSettings); !isDbEqual || !isStorEqual {
 				rlc.currentSettings = newSettings
 
@@ -147,56 +135,45 @@ func (rlc *OracleLoggerController) Run() {
 					if rlc.dbSuccess {
 						rlc.disconnectFromDb()
 					}
-					//if rlc.currentSettings.NeedWork {
-					curErr := rlc.connectToDb()
-					if curErr != nil {
-						rlc.StateChan <- chief_state.LoggerState{
-							LoggerConnected:   chief_state.StateOk,
-							LoggerDbConnected: chief_state.StateError,
-							LoggerDbError:     curErr.Error(),
-							LoggerVersion:     "",
-						}
-					}
-					//}
+					rlc.StateChan <- createLoggerState(rlc.connectToDb())
 				}
 				if !isStorEqual {
-					rlc.needCheckLogCount = true
-					rlc.needCheckLogLifetime = true
-					rlc.checkQueryQueue()
+					rlc.checkLogCount()
+					rlc.checkLogLivetime()
 				}
 			}
 
-			// получено новое сообщение
-		case newMessage := <-rlc.MessChan:
-			logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len()+1, logContainerSize), logger.StateDefaultColor)
-
-			if rlc.logQueue.Len() < logContainerSize {
-				// проверяем длину текста (max 2000)
-				if len(newMessage.Text) > maxTextLen {
-					newMessage.Text = newMessage.Text[:maxTextLen]
-				}
-
-				rlc.logQueue.PushBack(newMessage)
-				rlc.checkQueryQueue()
+		// получено новое сообщение
+		case logMsg := <-rlc.MessChan:
+			// проверяем длину текста (max 2000)
+			if len(logMsg.Text) > maxTextLen {
+				logMsg.Text = logMsg.Text[:maxTextLen]
 			}
 
-			// пришел результат выполнения запроса из горутины
+			rlc.queryQueue.Put(queueItem{
+				queryText: oraInsertLogQuery(logMsg),
+				priority:  LogPriority,
+			})
+			rlc.curInsertCount++
+
+			if rlc.curInsertCount > insertCountCheck {
+				rlc.checkLogCount()
+				rlc.curInsertCount = 0
+			}
+			rlc.checkQueryQueue()
+
+		// пришел результат выполнения запроса
 		case execErr := <-rlc.execResultChan:
 			if execErr != nil {
 				fmt.Println("Error executing query ", execErr)
-				//fmt.Fatal("")
 				if strings.Contains(execErr.Error(), "database is closed") ||
 					strings.Contains(execErr.Error(), "server is not accepting clients") {
 					rlc.disconnectFromDb()
 				} else {
 					rlc.canExecute = true
 				}
-				rlc.StateChan <- chief_state.LoggerState{
-					LoggerConnected:   chief_state.StateOk,
-					LoggerDbConnected: chief_state.StateError,
-					LoggerDbError:     execErr.Error(),
-					LoggerVersion:     "",
-				}
+
+				rlc.StateChan <- createLoggerState(execErr)
 			} else {
 				rlc.lastQueryText = ""
 				rlc.canExecute = true
@@ -204,57 +181,36 @@ func (rlc *OracleLoggerController) Run() {
 
 			rlc.checkQueryQueue()
 
-			// сработал тикер пингера БД
+		// сработал тикер пинга БД
 		case <-rlc.pingDbTicker.C:
-			if rlc.dbSuccess { //&& rlc.currentSettings.NeedWork {
-				curErr := rlc.heartbeat()
-
-				if curErr != nil {
-					rlc.StateChan <- chief_state.LoggerState{
-						LoggerConnected:   chief_state.StateOk,
-						LoggerDbConnected: chief_state.StateError,
-						LoggerDbError:     curErr.Error(),
-						LoggerVersion:     "",
-					}
-				} else {
-
-					rlc.StateChan <- chief_state.LoggerState{
-						LoggerConnected:   chief_state.StateOk,
-						LoggerDbConnected: chief_state.StateOk,
-						LoggerDbError:     "",
-						LoggerVersion:     "",
-					}
-				}
+			if rlc.dbSuccess {
+				rlc.StateChan <- createLoggerState(rlc.heartbeat())
 			}
 
-			// сработал тикер подключения к БД
+		// сработал тикер подключения к БД
 		case <-rlc.connectDbTicker.C:
-			if !rlc.dbSuccess { //&& rlc.currentSettings.NeedWork {
-				curErr := rlc.connectToDb()
-				if curErr != nil {
-					rlc.StateChan <- chief_state.LoggerState{
-						LoggerConnected:   chief_state.StateOk,
-						LoggerDbConnected: chief_state.StateError,
-						LoggerDbError:     curErr.Error(),
-						LoggerVersion:     "",
-					}
-				} else {
-					rlc.StateChan <- chief_state.LoggerState{
-						LoggerConnected:   chief_state.StateOk,
-						LoggerDbConnected: chief_state.StateOk,
-						LoggerDbError:     "",
-						LoggerVersion:     "",
-					}
-				}
+			if !rlc.dbSuccess {
+				rlc.StateChan <- createLoggerState(rlc.connectToDb())
 			}
 
-			// сработал тикер проверки времени жизни логов
+		// сработал тикер проверки времени жизни логов
 		case <-rlc.logLifetimeTicker.C:
-			rlc.needCheckLogLifetime = true
+			rlc.checkLogLivetime()
 
-			// пришло изменение состояния канала
-			// case chState := <-rlc.ChannelStatesChan:
-			// 	rlc.ChannelStatesQueue.PushBack(chState)
+		// тикер проверки состояния каналов
+		case <-rlc.checkStatesTckr.C:
+			if rlc.writeStatesToDb {
+				if !channel_state.ChannelStatesEqual(rlc.lastChannelStates, chief_state.CommonChiefState.ChannelStates) {
+					rlc.lastChannelStates = chief_state.CommonChiefState.ChannelStates
+					for _, stateVal := range rlc.lastChannelStates {
+						rlc.queryQueue.Put(queueItem{
+							queryText: oraUpdateChannelStateQuery(stateVal),
+							priority:  StatesPriority,
+						})
+					}
+					rlc.checkQueryQueue()
+				}
+			}
 		}
 	}
 }
@@ -280,9 +236,6 @@ func (rlc *OracleLoggerController) connectToDb() error {
 		rlc.disconnectFromDb()
 		return errPing
 	} else {
-		//fmt.Println("Database is opened")
-		//rlc.initDbStructure()
-
 		rlc.dbSuccess = true
 		rlc.canExecute = true
 
@@ -309,68 +262,34 @@ func (rlc *OracleLoggerController) disconnectFromDb() {
 	rlc.db.Close()
 }
 
+func (rlc *OracleLoggerController) checkLogCount() {
+	rlc.queryQueue.Put(queueItem{
+		queryText: oraCheckLogCountQuery(onlineLogMaxCount, rlc.currentSettings.LogStoreMaxCount),
+		priority:  CheckLogCountPriority,
+	})
+	rlc.checkQueryQueue()
+}
+
+func (rlc *OracleLoggerController) checkLogLivetime() {
+	oldLogDate := time.Now().AddDate(0, 0, -rlc.currentSettings.LogStoreDays)
+
+	rlc.queryQueue.Put(queueItem{
+		queryText: oraCheckLogLivetimeQuery(oldLogDate.Format(timeFormat)),
+		priority:  CheckLogLivetimePriority,
+	})
+	rlc.checkQueryQueue()
+}
+
 func (rlc *OracleLoggerController) checkQueryQueue() {
 	if rlc.canExecute {
-		rlc.canExecute = false
 
-		if rlc.ChannelStatesQueue.Len() > 0 {
-			rlc.execLogQueryChan <- oraUpdateChannelStateQuery(rlc.ChannelStatesQueue.PopFront().(channel_state.ChannelState))
-			return
-		}
+		if rlc.queryQueue.Len() > 1 {
 
-		// необходимо проверить кол-во хранимых логов
-		if rlc.needCheckLogCount {
-			rlc.needCheckLogCount = false
-
-			rlc.execCountQueryChan <- struct{}{}
-			return
-		}
-
-		// необходимо проверить время жизни логов
-		if rlc.needCheckLogLifetime {
-			rlc.needCheckLogLifetime = false
-
-			oldLogDate := time.Now().AddDate(0, 0, -rlc.currentSettings.LogStoreDays)
-			logger.SetDebugParam(dbLastSizeCheckKey, time.Now().UTC().Format(timeFormat), logger.StateDefaultColor)
-
-			rlc.execLogQueryChan <- oraCheckLogLifetimeQuery(oldLogDate.Format("2006-01-02 15:04:05"))
-			return
-		}
-
-		var curQueryText string // текст текущего запроса
-
-		// if rlc.lastQueryText != "" {
-		// 	curQueryText = rlc.lastQueryText
-		// } else {
-		var insetrCnt int
-		for insetrCnt = 0; insetrCnt < oraMaxInsertCount; insetrCnt++ {
-			if rlc.logQueue.Len() > 0 {
-				oraInsertLogBeginQuery(&curQueryText, fmtp_logger.LogMessage(rlc.logQueue.PopFront().(fmtp_logger.LogMessage)))
-				rlc.curInsertCount++
-			} else {
-				break
+			queries, _ := rlc.queryQueue.Get(1)
+			if len(queries) == 1 {
+				rlc.canExecute = false
+				rlc.execQueryChan <- queries[0].(queueItem).queryText
 			}
-		}
-		logger.SetDebugParam(dbInsertCountKey, strconv.Itoa(insetrCnt), logger.StateDefaultColor)
-
-		//}
-
-		logger.SetDebugParam(dbQueueKey, fmt.Sprintf("%d / %d", rlc.logQueue.Len(), logContainerSize), logger.StateDefaultColor)
-
-		if curQueryText != "" {
-			if rlc.lastQueryText == "" {
-				oraInsertLogEndQuery(&curQueryText)
-			}
-			rlc.lastQueryText = curQueryText
-
-			rlc.execLogQueryChan <- curQueryText
-
-			if rlc.curInsertCount > insertCountCheck {
-				rlc.needCheckLogCount = true
-				rlc.curInsertCount = 0
-			}
-		} else {
-			rlc.canExecute = true
 		}
 	}
 }
@@ -380,15 +299,9 @@ func (rlc *OracleLoggerController) executeQuery() {
 	for {
 		select {
 		// пришел запрос добавления сообщения логов
-		case logQueryText := <-rlc.execLogQueryChan:
-			//fmt.Println("Executing query %v", logQueryText)
-			_, curErr := rlc.db.Exec(logQueryText)
-			rlc.execResultChan <- curErr
-
-		// пришел запрос проверки кол-ва хранимых логов
-		case <-rlc.execCountQueryChan:
-			logger.SetDebugParam(dbLastCountCheckKey, time.Now().UTC().Format(timeFormat), logger.StateDefaultColor)
-			_, curErr := rlc.db.Exec(oraCheckLogCountQuery(onlineLogMaxCount, rlc.currentSettings.LogStoreMaxCount))
+		case queryText := <-rlc.execQueryChan:
+			fmt.Println("Executing query %v", queryText)
+			_, curErr := rlc.db.Exec(queryText)
 			rlc.execResultChan <- curErr
 
 		// необходимо завершить горутину
@@ -396,6 +309,10 @@ func (rlc *OracleLoggerController) executeQuery() {
 			return
 		}
 	}
+}
+
+func (rlc *OracleLoggerController) SetWriteStatesToDb(writeState bool) {
+	rlc.writeStatesToDb = writeState
 }
 
 // инициализация БД (выполнение запросов создания таблиц, представлений)

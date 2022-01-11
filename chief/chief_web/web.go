@@ -11,19 +11,16 @@ import (
 
 type httpServer struct {
 	http.Server
-	//shutdownReq chan bool
-	done chan struct{}
-	//reqCount    uint32
+
+	done       chan struct{}
 	configPage *ConfigPage
 	chiefPage  *ChiefPage
 }
 
 var srv httpServer
 
-// UrlConfigChan канал для отправки настроек подключения к конфигуратору
 var UrlConfigChan = make(chan configurator_urls.ConfiguratorUrls, 1)
 
-// Start -
 func Start(done chan struct{}) {
 	wsc.load()
 
@@ -61,22 +58,6 @@ func Start(done chan struct{}) {
 	}()
 }
 
-// SetUrlConfig - задать параметры подключения к конфигуратору
 func SetUrlConfig(urlConfig configurator_urls.ConfiguratorUrls) {
 	srv.configPage.UrlConfig = urlConfig
 }
-
-// SetChannelStates - задать состояния FMTP каналов
-// func SetChannelStates(states []channel_state.ChannelState) {
-// 	srv.chiefPage.ChannelStates = states
-// }
-
-// SetOldiProviderStates - задать состояния провайдеров OLDI
-// func SetOldiProviderStates(states []chief_state.ProviderState) {
-// 	srv.chiefPage.OldiProviderStates = states
-// }
-
-// SetAodbProviderStates - задать состояния провайдеров AODB
-// func SetAodbProviderStates(states []chief_state.ProviderState) {
-// 	srv.chiefPage.AodbProviderStates = states
-// }

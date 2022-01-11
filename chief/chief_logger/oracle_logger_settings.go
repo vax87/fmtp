@@ -2,11 +2,6 @@ package chief_logger
 
 import "strconv"
 
-//"encoding/json"
-//"io/ioutil"
-//"os"
-//"path/filepath"
-
 // настройки контроллера записи логов в БД
 type OracleLoggerSettings struct {
 	//NeedWork			bool	`json:"LoggerNeedWork"`			// необходимость работы

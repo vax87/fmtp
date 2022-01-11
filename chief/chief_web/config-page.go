@@ -13,7 +13,8 @@ type ConfigPage struct {
 	editTempl *template.Template
 	Title     string
 
-	UrlConfig configurator_urls.ConfiguratorUrls
+	UrlConfig      configurator_urls.ConfiguratorUrls
+	WriteStateToDb bool
 }
 
 func (cp *ConfigPage) initialize(title string) {
@@ -46,7 +47,16 @@ var ConfigTemplate = `
 		<tr>
 			<td align="left">URL для отправки состояния:</td>
 			<td><input name="HeartbeatURLStr" type="text" size="100" value={{printf "%s" .HeartbeatURLStr}}></td>			
-		</tr>		
+		</tr>
+		
+		<tr>
+		<tr>
+			<td colspan="2"></td>
+		</tr>
+		<td>
+			<input type="checkbox" name="WriteStateToDb" value="check" {{if .WriteStateToDb}} checked {{end}} />Сохранять состояние каналов в БД:<Br>
+		</td>
+	</tr>
 	{{end}}	
 	<tr> 
     	<td colspan="2"><input type="submit" value="Применить"></td>

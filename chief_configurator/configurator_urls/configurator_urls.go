@@ -13,11 +13,11 @@ type ConfiguratorUrls struct {
 	HeartbeatURL    *url.URL `json:"-"`
 	SettingsURLStr  string   `json:"SettingsUrl"` // url, на который отправляется запрос настроек
 	SettingsURL     *url.URL `json:"-"`
+	WriteStateToDb  bool     `json:"WriteStateToDb"` // запись состояния каналов в БД
 }
 
 var confFilePath = utils.AppPath() + "/config/config_urls.json"
 
-// чтение настроек URL из файла
 func (cu *ConfiguratorUrls) ReadFromFile() {
 	if errRead := utils.ReadFromFile(confFilePath, cu); errRead != nil {
 		logger.PrintfErr("Ошибка чтения файла конфигураций URL. Ошибка: %v.", errRead)
@@ -32,7 +32,6 @@ func (cu *ConfiguratorUrls) ReadFromFile() {
 	}
 }
 
-// SaveToFile сохранение настроек в файл
 func (cu *ConfiguratorUrls) SaveToFile() {
 	if errWrite := utils.SaveToFile(confFilePath, cu); errWrite != nil {
 		logger.PrintfErr("Ошибка сохранения конфигурации URL в файл. Ошибка: %v", errWrite)

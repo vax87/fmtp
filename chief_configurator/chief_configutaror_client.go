@@ -36,9 +36,8 @@ type httpResult struct {
 type ChiefConfiguratorClient struct {
 	configUrls           configurator_urls.ConfiguratorUrls
 	ChiefSettChangedChan chan struct{}
-	//FmtpChannelSettsChan chan channel_settings.ChannelSettingsWithPort // канал для передачи настроек FMTP каналов
-	//LoggerSettsChan      chan chief_settings.LoggerSettings            // канал для передачи настроек логгера
-	//ProviderSettsChan    chan []chief_settings.ProviderSettings        // канал для передачи натроек провайдеров
+
+	SaveStatesToDbChan chan bool
 
 	postResultChan chan httpResult
 
@@ -51,13 +50,10 @@ type ChiefConfiguratorClient struct {
 	sendHeartbeatTicker *time.Ticker
 }
 
-// NewChiefClient конструктор клиента
 func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
-		ChiefSettChangedChan: make(chan struct{}),
-		// FmtpChannelSettsChan:   make(chan channel_settings.ChannelSettingsWithPort, 1),
-		// LoggerSettsChan:        make(chan chief_settings.LoggerSettings, 1),
-		// ProviderSettsChan:      make(chan []chief_settings.ProviderSettings, 1),
+		ChiefSettChangedChan:   make(chan struct{}, 1),
+		SaveStatesToDbChan:     make(chan bool, 1),
 		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
@@ -65,7 +61,6 @@ func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	}
 }
 
-// Work рабочий цикл
 func (cc *ChiefConfiguratorClient) Work() {
 
 	if cc.withDocker {
@@ -92,8 +87,6 @@ func (cc *ChiefConfiguratorClient) Work() {
 						if unmErr = json.Unmarshal(postRes.result, &ChiefCfg); unmErr != nil {
 							logger.PrintfErr("Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: %s. Ошибка: %s.", string(postRes.result), unmErr.Error())
 						} else {
-							//logger.PrintfWarn("POST RESULT: %s", string(postRes.result))
-
 							ChiefCfg.IsInitialised = true
 							logger.PrintfDebug("Получены настройки от конфигуратора. %+v.", ChiefCfg)
 
@@ -154,6 +147,7 @@ func (cc *ChiefConfiguratorClient) Work() {
 		// получены настроки URL из web
 		case cc.configUrls = <-chief_web.UrlConfigChan:
 			cc.configUrls.SaveToFile()
+			cc.SaveStatesToDbChan <- cc.configUrls.WriteStateToDb
 		}
 	}
 }
@@ -162,6 +156,7 @@ func (cc *ChiefConfiguratorClient) Work() {
 func (cc *ChiefConfiguratorClient) Start() {
 	cc.configUrls.ReadFromFile()
 	chief_web.SetUrlConfig(cc.configUrls)
+	cc.SaveStatesToDbChan <- cc.configUrls.WriteStateToDb
 
 	cc.initBeforeGetSettings()
 	logger.PrintfDebug("Собственные IP адреса: %v", utils.GetLocalIpv4List())
@@ -260,15 +255,6 @@ func (cc *ChiefConfiguratorClient) sendSettings() {
 		ChiefCfg.ChannelSetts[ind].URLPath = "channel"
 		ChiefCfg.ChannelSetts[ind].URLPort = utils.FmtpChannelStartWebPort + ChiefCfg.ChannelSetts[ind].Id
 	}
-
-	// отправляем настройки каналов
-	// cc.FmtpChannelSettsChan <- channel_settings.ChannelSettingsWithPort{
-	// 	ChSettings: ChiefCfg.ChannelSetts,
-	// 	ChPort:     ChiefCfg.ChannelsPort,
-	// }
-
-	// отправляем настройки логгера
-	//cc.LoggerSettsChan <- ChiefCfg.LoggerSetts
 
 	// выставляем кодировку сообщений для OLDI провайдеров
 	for idx, val := range ChiefCfg.ProvidersSetts {
