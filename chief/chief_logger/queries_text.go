@@ -11,8 +11,6 @@ import (
 const (
 	onlineLogTableName  = "fmtp_online"
 	storageLogTableName = "fmtp_storage"
-	onlineLogViewName   = "fmtp_online_vw"
-	storageLogViewName  = "fmtp_storage_vw"
 
 	maxTextLen = 2000
 )
@@ -83,7 +81,7 @@ func oraInsertLogQuery(logMessage fmtp_logger.LogMessage) string {
 	return queryText
 }
 
-// // текст окончания запроса добавления сообщений в БД.
-// func oraInsertLogEndQuery(queryText *string) {
-// 	*queryText += " SELECT 1 FROM dual"
-// }
+// текст запроса проверки подключени к БД.
+func oraHeartbeatQuery() string {
+	return "SELECT 'heartbeat' FROM dual"
+}
