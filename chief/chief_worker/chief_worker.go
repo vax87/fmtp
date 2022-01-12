@@ -23,7 +23,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 	var aodbCntrl = aodb.NewController(done)
 
 	// TCP сервер для подключения OLDI провайдеров
-	var oldiCntrl = oldi.NewOldiController()
+	var oldiTcpCntrl = oldi.NewOldiTcpController()
 
 	// контроллер FMTP каналов
 	var channelCntrl = chief_channel.NewChiefChannelServer(done, withDocker)
@@ -35,7 +35,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 	go chiefConfClient.Start()
 
 	go aodbCntrl.Work()
-	go oldiCntrl.Work()
+	go oldiTcpCntrl.Work()
 	go channelCntrl.Work()
 
 	go tky.Work()
@@ -54,7 +54,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			}
 
 			aodbCntrl.ProviderSettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.AODBProvider)
-			oldiCntrl.ProviderSettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.OLDIProvider)
+			oldiTcpCntrl.SettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.OLDIProvider)
 
 			chief_logger.ChiefLog.SettsChan <- chief_configurator.ChiefCfg.LoggerSetts
 
@@ -70,12 +70,12 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			aodbCntrl.ToAODBDataChan <- aodbData
 
 		// получены данные от провайдера OLDI
-		case oldiData := <-oldiCntrl.FromOldiDataChan:
+		case oldiData := <-oldiTcpCntrl.FromOldiDataChan:
 			channelCntrl.IncomeOldiPacketChan <- oldiData
 
 		// OLDI пакет от контроллера каналов
 		case oldiData := <-channelCntrl.OutOldiPacketChan:
-			oldiCntrl.ToOldiDataChan <- oldiData
+			oldiTcpCntrl.ToOldiDataChan <- oldiData
 
 		case <-done:
 			wg.Done()

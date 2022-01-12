@@ -2,9 +2,8 @@ package chief_logger
 
 import "strconv"
 
-// настройки контроллера записи логов в БД
+// OracleLoggerSettings - настройки контроллера записи логов в БД
 type OracleLoggerSettings struct {
-	//NeedWork			bool	`json:"LoggerNeedWork"`			// необходимость работы
 	Hostname    string `json:"DbHostname"`    // адрес/название хоста
 	Port        int    `json:"DbPort"`        // порт подключения к БД
 	ServiceName string `json:"DbServiceName"` // название сервиса БД
@@ -17,13 +16,11 @@ type OracleLoggerSettings struct {
 
 // сравнение настроек в части настроек БД и настроек хранения логов
 func (s *OracleLoggerSettings) equal(otherRls OracleLoggerSettings) (bool, bool) {
-	isDbEqual :=
-		//rls.NeedWork == otherRls.NeedWork &&
-		s.Hostname == otherRls.Hostname &&
-			s.Port == otherRls.Port &&
-			s.ServiceName == otherRls.ServiceName &&
-			s.UserName == otherRls.UserName &&
-			s.Password == otherRls.Password
+	isDbEqual := s.Hostname == otherRls.Hostname &&
+		s.Port == otherRls.Port &&
+		s.ServiceName == otherRls.ServiceName &&
+		s.UserName == otherRls.UserName &&
+		s.Password == otherRls.Password
 	isStorEqual := s.LogStoreMaxCount == otherRls.LogStoreMaxCount &&
 		s.LogStoreDays == otherRls.LogStoreDays
 
@@ -38,5 +35,4 @@ func (s *OracleLoggerSettings) ConnString() string {
 		"(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=" + s.Hostname +
 		")(PORT=" + strconv.Itoa(s.Port) +
 		")))(CONNECT_DATA=(SERVICE_NAME=" + s.ServiceName + ")))"
-
 }

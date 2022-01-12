@@ -31,10 +31,10 @@ type oldiClnt struct {
 	toSendDataChan chan []byte   // канал для отправки данных
 }
 
-// OldiController контроллер для работы с провайдером OLDI
-type OldiController struct {
-	ProviderSettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
-	ProviderSetts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
+// OldiTcpController контроллер для работы с провайдером OLDI по TCP
+type OldiTcpController struct {
+	SettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
+	setts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
 
 	FromOldiDataChan chan []byte // канал для приема сообщений от провайдера OLDI
 	ToOldiDataChan   chan []byte // канал для отправки сообщений провайдеру OLDI
@@ -52,17 +52,17 @@ type OldiController struct {
 }
 
 // NewOldiController конструктор
-func NewOldiController() *OldiController {
-	return &OldiController{
-		ProviderSettsChan: make(chan []chief_settings.ProviderSettings, 10),
-		FromOldiDataChan:  make(chan []byte, 1024),
-		ToOldiDataChan:    make(chan []byte, 1024),
-		checkStateTicker:  time.NewTicker(stateTickerInt),
-		providerClients:   make(map[net.Conn]oldiClnt),
+func NewOldiTcpController() *OldiTcpController {
+	return &OldiTcpController{
+		SettsChan:        make(chan []chief_settings.ProviderSettings, 10),
+		FromOldiDataChan: make(chan []byte, 1024),
+		ToOldiDataChan:   make(chan []byte, 1024),
+		checkStateTicker: time.NewTicker(stateTickerInt),
+		providerClients:  make(map[net.Conn]oldiClnt),
 	}
 }
 
-func (c *OldiController) startServer(ctx context.Context, localPort int) {
+func (c *OldiTcpController) startServer(ctx context.Context, localPort int) {
 	var errListen error
 	if c.tcpListener, errListen = net.Listen("tcp", string(":"+strconv.Itoa(localPort))); errListen != nil {
 		logger.PrintfErr("Ошибка запуска TCP сервера OLDI провайдера. Ошибка: %v.", errListen)
@@ -83,7 +83,7 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 
 			default:
 				if curConn, err := c.tcpListener.Accept(); err != nil {
-					logger.PrintfErr("Ошибка подключения клиента к TCP серверу OLDI провайдера. Ошибка: %v.", err)
+					logger.PrintfErr("Ошибка подключения OLDI провайдера. Ошибка: %v.", err)
 					continue
 				} else {
 					c.providerClients[curConn] = oldiClnt{
@@ -92,8 +92,7 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 					}
 
 					remoteAddr, _ := curConn.RemoteAddr().(*net.TCPAddr)
-					logger.PrintfDebug("Успешное подключение клиента к TCP серверу OLDI провайдера. "+
-						"Адрес подключенного клиента: %s", remoteAddr.IP.String())
+					logger.PrintfDebug("Успешное подключение OLDI провайдера. Адрес подключенного клиента: %s", remoteAddr.IP.String())
 
 					go c.receiveLoop(curConn, c.providerClients[curConn])
 					go c.sendLoop(curConn, c.providerClients[curConn])
@@ -103,7 +102,7 @@ func (c *OldiController) startServer(ctx context.Context, localPort int) {
 	}
 }
 
-func (c *OldiController) stopServer() {
+func (c *OldiTcpController) stopServer() {
 
 	for key := range c.providerClients {
 		c.closeClient(key)
@@ -115,19 +114,19 @@ func (c *OldiController) stopServer() {
 	c.closeTcpListenerFunc()
 }
 
-func (c *OldiController) closeClient(conn net.Conn) {
+func (c *OldiTcpController) closeClient(conn net.Conn) {
 	if val, ok := c.providerClients[conn]; ok {
 
 		conn.SetDeadline(time.Now().Add(time.Second))
 		// останавливаем передачу / прием
 		utils.ChanSafeClose(val.cancelWorkChan)
-		logger.PrintfDebug("Отключен клиент OLDI провайдера. Адрес: %s", conn.RemoteAddr().String())
+		logger.PrintfDebug("Отключен OLDI провайдер. Адрес: %s", conn.RemoteAddr().String())
 		delete(c.providerClients, conn)
 	}
 }
 
 // обработчик получения данных
-func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
+func (c *OldiTcpController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 	for {
 		select {
 		// отмена приема данных
@@ -155,7 +154,7 @@ func (c *OldiController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 }
 
 // обработчик отправки данных
-func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
+func (c *OldiTcpController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 	for {
 		select {
 		// отмена отправки данных
@@ -181,14 +180,14 @@ func (c *OldiController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 }
 
 // Work реализация работы
-func (c *OldiController) Work() {
+func (c *OldiTcpController) Work() {
 
 	for {
 		select {
 		// получены новые настройки каналов
-		case c.ProviderSetts = <-c.ProviderSettsChan:
+		case c.setts = <-c.SettsChan:
 			var localPort int
-			for _, val := range c.ProviderSetts {
+			for _, val := range c.setts {
 				localPort = val.LocalPort
 				c.providerEncoding = val.ProviderEncoding
 			}
@@ -216,7 +215,7 @@ func (c *OldiController) Work() {
 		case <-c.checkStateTicker.C:
 			var states []chief_state.ProviderState
 
-			for _, val := range c.ProviderSetts {
+			for _, val := range c.setts {
 				curState := chief_state.ProviderState{
 					ProviderID:    val.ID,
 					ProviderType:  val.DataType,

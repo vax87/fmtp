@@ -30,7 +30,7 @@ type LoggerSettings struct {
 	LoggerPort         int    `json:"LoggerPort"`
 	DbServiceName      string `json:"DbServiceName"`
 	DbHostname         string `json:"DbHostname"`
-	DbMaxLogStoreCount int    `json:"DbMaxLogStoreCount`
+	DbMaxLogStoreCount int    `json:"DbMaxLogStoreCount"`
 	DbPassword         string `json:"DbPassword"`
 	DbPort             int    `json:"DbPort"`
 	DbStoreDays        int    `json:"DbStoreDays"`

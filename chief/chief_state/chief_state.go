@@ -20,13 +20,13 @@ type LoggerState struct {
 }
 
 type ProviderState struct {
-	ProviderID           int      `json:"ProviderID"`    // идентификатор провайдера
-	ProviderType         string   `json:"ProviderType"`  // тип провайдера (OLID | AODB)
-	ProviderIPs          []string `json:"ProviderIPs"`   // список сетевых адресов провайдеров
-	ProviderState        string   "ProviderState"        // состояние провайдера
-	ProviderErrorMessage string   "ProviderErrorMessage" // текст ошибки
-	ClientAddresses      string   `json:"-"`             // адреса подключенных клиентов
-	ProviderURL          string   `json:"-"`             // URL web странички провайдера
+	ProviderID           int      `json:"ProviderID"`           // идентификатор провайдера
+	ProviderType         string   `json:"ProviderType"`         // тип провайдера (OLID | AODB)
+	ProviderIPs          []string `json:"ProviderIPs"`          // список сетевых адресов провайдеров
+	ProviderState        string   `json:"ProviderState"`        // состояние провайдера
+	ProviderErrorMessage string   `json:"ProviderErrorMessage"` // текст ошибки
+	ClientAddresses      string   `json:"-"`                    // адреса подключенных клиентов
+	ProviderURL          string   `json:"-"`                    // URL web странички провайдера
 	StateColor           string   `json:"-"`
 }
 
