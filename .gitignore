@@ -11,3 +11,4 @@ chief/__debug_bin
 /chief/versions
 /channel/*.exe
 /chief/*.exe
+/chief/fdps_imit/*.exe

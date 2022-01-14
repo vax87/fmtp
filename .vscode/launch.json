@@ -27,6 +27,18 @@
             },
             "args": ["34534", "10", "EYVL", "UMKK", "OLDI", "channel", "13110"]
         },
+        {            
+            "name": "fdps_imit_x64",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/chief/fdps_imit/main.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "amd64"
+            },
+            "args": ["34534", "10", "EYVL", "UMKK", "OLDI", "channel", "13110"]
+        },
         {
             "name": "fmtp_chief_x32",
             "type": "go",
