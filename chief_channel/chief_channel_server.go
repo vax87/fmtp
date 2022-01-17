@@ -3,12 +3,10 @@ package chief_channel
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"os/exec"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +20,7 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
-	"fdps/fmtp/chief/fdps"
+	pb "fdps/fmtp/chief/proto/fmtp"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp"
 	"fdps/fmtp/fmtp_logger"
@@ -60,11 +58,8 @@ type ChiefChannelServer struct {
 	channelSetts     channel_settings.ChannelSettingsWithPort      // текущие настройки каналов и орт для связи с каналами
 	statesSendTicker *time.Ticker                                  // тикер отправки состояния каналов
 
-	IncomeAodbPacketChan chan []byte // канал для приема сообщений от провайдера AODB
-	OutAodbPacketChan    chan []byte // канал для отправки сообщений провайдеру AODB
-
-	IncomeOldiPacketChan chan []byte // канал для приема сообщений от провайдера OLDI
-	OutOldiPacketChan    chan []byte // канал для отправки сообщений провайдеру OLDI
+	FromFdpsPacketChan chan pb.Msg // канал для приема сообщений от провайдера OLDI
+	ToFdpsPacketChan   chan pb.Msg // канал для отправки сообщений провайдеру OLDI
 
 	ChannelBinMap *sync.Map // ключ - идентификатор каналаб значение типа сhannelBin
 
@@ -76,12 +71,8 @@ type ChiefChannelServer struct {
 
 	chStates map[int]сhannelStateTime // ключ - ID канала
 
-	aodbIdent    int // идентификатор сообщения, отправляемого AODB cервису
-	oldiIdent    int // идентификатор сообщения, отправляемого OLDI cервису
-	withDocker   bool
-	dataFromOldi []byte // буфер полученных данных OLDI
-
-	//LogChan chan fmtp_logger.LogMessage // канал для передачи сообщений от каналов
+	oldiIdent  int // идентификатор сообщения, отправляемого OLDI cервису
+	withDocker bool
 }
 
 // состояние FMTP канала, при котором ему отправляем сообщений от AODB
@@ -96,20 +87,16 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 			ChSettings: make([]channel_settings.ChannelSettings, 0),
 			ChPort:     0,
 		},
-		statesSendTicker:     time.NewTicker(time.Second),
-		IncomeAodbPacketChan: make(chan []byte, 1024),
-		OutAodbPacketChan:    make(chan []byte, 1024),
-		IncomeOldiPacketChan: make(chan []byte, 1024),
-		OutOldiPacketChan:    make(chan []byte, 1024),
-		killerChan:           make(chan struct{}),
-		ChannelBinMap:        new(sync.Map),
-		wsServer:             web_sock.NewWebSockServer(done),
-		wsClients:            make(map[int]*websocket.Conn),
-		chStates:             make(map[int]сhannelStateTime),
-		aodbIdent:            1,
-		oldiIdent:            1,
-		withDocker:           workWithDocker,
-		//LogChan:              make(chan fmtp_logger.LogMessage, 10),
+		statesSendTicker:   time.NewTicker(time.Second),
+		FromFdpsPacketChan: make(chan pb.Msg, 1024),
+		ToFdpsPacketChan:   make(chan pb.Msg, 1024),
+		killerChan:         make(chan struct{}),
+		ChannelBinMap:      new(sync.Map),
+		wsServer:           web_sock.NewWebSockServer(done),
+		wsClients:          make(map[int]*websocket.Conn),
+		chStates:           make(map[int]сhannelStateTime),
+		oldiIdent:          1,
+		withDocker:         workWithDocker,
 	}
 }
 
@@ -208,115 +195,9 @@ func (cc *ChiefChannelServer) Work() {
 				}
 			})
 
-		// получен новый пакет от провайдера
-		case incomeData := <-cc.IncomeAodbPacketChan:
-			var fdpsHdr fdps.FdpsHeader
-			var unmErr error
-			unmErr = json.Unmarshal(incomeData, &fdpsHdr)
-			if unmErr == nil {
-				switch fdpsHdr.MsgHeader {
-
-				case fdps.FdpsDataText:
-					var dataMsg fdps.FdpsAodbPackage
-					unmErr = json.Unmarshal(incomeData, &dataMsg)
-					if unmErr == nil {
-						logger.PrintfDebug("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, chief_settings.AODBProvider,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text)))
-						// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, fdps.AODBProvider,
-						// 	fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", dataMsg.Text))
-						cc.ProcessAodbPacket(dataMsg)
-					} else {
-						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
-							string(incomeData), unmErr.Error())
-					}
-
-				case fdps.FdpsAcknowledge:
-					var accMsg fdps.FdpsAodbAcknowledge
-					unmErr = json.Unmarshal(incomeData, &accMsg)
-					if unmErr == nil {
-						logger.PrintfDebug("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, chief_settings.AODBProvider,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident)))
-						// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, fdps.AODBProvider,
-						// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", accMsg.Ident))
-					} else {
-						logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
-							string(incomeData), unmErr.Error())
-					}
-				default:
-					logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неизвестного формата, Текст: %s.",
-						string(incomeData))
-				}
-
-			} else {
-				logger.PrintfErr("Получено сообщение от плановой подсистемы(AODB) неверного формата, Текст: %s. Ошибка: %s.",
-					string(incomeData), unmErr.Error())
-			}
-
 		// получен новый пакет от провайдера OLDI
-		case incomeOldiData := <-cc.IncomeOldiPacketChan:
-			cc.dataFromOldi = append(cc.dataFromOldi, incomeOldiData...)
-
-			// вырезаем все подтверждения <acc>
-			startAccIdx := strings.Index(string(cc.dataFromOldi), startOldiAccTag)
-			endAccIdx := strings.Index(string(cc.dataFromOldi), endOldiAccTag)
-			hasAcc := (startAccIdx != -1 && endAccIdx != -1 && startAccIdx < endAccIdx)
-
-			for {
-				if hasAcc {
-					curAccBytes := make([]byte, 2*(endAccIdx+len(endOldiAccTag)-startAccIdx))
-					copy(curAccBytes, cc.dataFromOldi[startAccIdx:endAccIdx+len(endOldiAccTag)])
-
-					var oldiAcc fdps.FdpsOldiAcknowledge
-					if unmAccErr := xml.Unmarshal(curAccBytes, &oldiAcc); unmAccErr == nil {
-						logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-							fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes))))
-						// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, fdps.OLDIProvider,
-						// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes)))
-					}
-
-					cc.dataFromOldi = append(cc.dataFromOldi[:startAccIdx], cc.dataFromOldi[endAccIdx+len(endOldiAccTag):]...)
-
-					startAccIdx = strings.Index(string(cc.dataFromOldi), startOldiAccTag)
-					endAccIdx = strings.Index(string(cc.dataFromOldi), endOldiAccTag)
-					hasAcc = (startAccIdx != -1 && startAccIdx < endAccIdx)
-				} else {
-					break
-				}
-
-			}
-
-			startMsgIdx := strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
-			endMsgIdx := strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
-			hasMsg := (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
-
-			for {
-				if hasMsg {
-
-					curMsgBytes := make([]byte, endMsgIdx+len(endOldiMsgTag)-startMsgIdx)
-					copy(curMsgBytes, cc.dataFromOldi[startMsgIdx:endMsgIdx+len(endOldiMsgTag)])
-
-					var oldiPkg fdps.FdpsOldiPackage
-
-					if unmPkgErr := xml.Unmarshal(curMsgBytes, &oldiPkg); unmPkgErr == nil {
-						logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-							fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text)))
-
-						// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, fdps.OLDIProvider,
-						// 	fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text))
-
-						cc.ProcessOldiPacket(oldiPkg)
-					}
-
-					cc.dataFromOldi = append(cc.dataFromOldi[:startMsgIdx], cc.dataFromOldi[endMsgIdx+len(endOldiMsgTag)-startMsgIdx:]...)
-
-					startMsgIdx = strings.Index(string(cc.dataFromOldi), startOldiMsgTag)
-					endMsgIdx = strings.Index(string(cc.dataFromOldi), endOldiMsgTag)
-					hasMsg = (startMsgIdx != -1 && endMsgIdx != -1 && startMsgIdx < endMsgIdx)
-
-				} else {
-					break
-				}
-			}
+		case oldiPkg := <-cc.FromFdpsPacketChan:
+			cc.ProcessOldiPacket(oldiPkg)
 
 		// получены данные от WS сервера
 		case curWsPkg := <-cc.wsServer.ReceiveDataChan:
@@ -369,7 +250,6 @@ func (cc *ChiefChannelServer) Work() {
 						case fmtp_logger.SeverityError:
 							logger.PrintfErr("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						}
-						//cc.LogChan <- curLogMsg.LogMessage
 					}
 
 				case ChannelMessageHeader:
@@ -387,50 +267,23 @@ func (cc *ChiefChannelServer) Work() {
 							}
 						}
 
-						if channelType == chief_settings.AODBProvider {
-							var aodbDataMsg fdps.FdpsAodbPackage
-							aodbDataMsg.MsgHeader = fdps.FdpsDataText
-							aodbDataMsg.Ident = strconv.Itoa(cc.aodbIdent)
-							aodbDataMsg.LocalAtc = localAtc
-							aodbDataMsg.RemoteAtc = remoteAtc
-							aodbDataMsg.Text = dataMsg.Text
-
-							cc.aodbIdent++
-							if cc.aodbIdent > 100000 {
-								cc.aodbIdent = 1
-							}
-
-							if dataToSend, mrshErr := json.Marshal(aodbDataMsg); mrshErr == nil {
-								logger.PrintfDebug("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, chief_settings.AODBProvider,
-									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
-								// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, fdps.AODBProvider,
-								// 	fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
-
-								cc.OutAodbPacketChan <- dataToSend
-							}
-						} else if channelType == chief_settings.OLDIProvider {
-							var oldiDataMsg fdps.FdpsOldiPackage
-							oldiDataMsg.Id = cc.oldiIdent
-							oldiDataMsg.LocalAtc = localAtc
-							oldiDataMsg.RemoteAtc = remoteAtc
-							oldiDataMsg.Text = dataMsg.Text
+						if channelType == chief_settings.OLDIProvider {
+							//var oldiPkg fdps.FdpsOldiPackage
+							var oldiPkg pb.Msg
+							oldiPkg.Id = strconv.Itoa(cc.oldiIdent)
+							oldiPkg.Cid = localAtc
+							oldiPkg.RemoteAtc = remoteAtc
+							oldiPkg.Txt = dataMsg.Text
 
 							cc.oldiIdent++
 							if cc.oldiIdent > 1000 {
 								cc.oldiIdent = 1
 							}
-
-							if dataToSend, mrshErr := xml.Marshal(oldiDataMsg); mrshErr == nil {
-								logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-									fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
-								// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, fdps.OLDIProvider,
-								// 	fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text))
-
-								cc.OutOldiPacketChan <- dataToSend
-							}
+							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
+								fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
+							cc.ToFdpsPacketChan <- oldiPkg
 						}
 					}
-
 				}
 
 			} else {
@@ -490,73 +343,29 @@ func (cc *ChiefChannelServer) Work() {
 	}
 }
 
-// ProcessAodbPacket обработка пакета AODB
-func (cc *ChiefChannelServer) ProcessAodbPacket(pkg fdps.FdpsAodbPackage) {
-	var channelID int = -1
-
-	for _, val := range cc.channelSetts.ChSettings {
-
-		if val.DataType == chief_settings.AODBProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
-			channelID = val.Id
-			break
-		}
-	}
-	accMsg := fdps.FdpsAodbAcknowledge{FdpsHeader: fdps.FdpsHeader{MsgHeader: fdps.FdpsAcknowledge}, Ident: pkg.Ident}
-	if channelID != -1 {
-		if sock, ok := cc.wsClients[channelID]; ok {
-			if aodbData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
-				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
-			} else {
-				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: aodbData, Sock: sock}
-					accMsg.State = fdps.FdpsAckOkText
-				} else {
-					accMsg.State = fdps.FdpsAckFailedText
-				}
-			}
-		} else {
-			accMsg.State = fdps.FdpsAckStoppedText
-		}
-	} else {
-		accMsg.State = fdps.FdpsAckMissedText
-	}
-
-	// отправка подтверждения
-	if dataToSend, mrshErr := json.Marshal(accMsg); mrshErr != nil {
-		logger.PrintfErr("Ошибка формирования сообщения подтверждения. Ошибка: %v.", mrshErr)
-	} else {
-		cc.OutAodbPacketChan <- dataToSend
-	}
-
-	logger.PrintfDebug("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, chief_settings.AODBProvider,
-		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg)))
-	// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityDebug, fdps.AODBProvider,
-	// 	fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %+v.", accMsg))
-}
-
 // ProcessOldiPacket обработка пакета OLDI
-func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
+func (cc *ChiefChannelServer) ProcessOldiPacket(pkg pb.Msg) {
 	var channelID int = -1
 
 	for _, val := range cc.channelSetts.ChSettings {
 
 		// от OLDI только cid приходит
-		if pkg.LocalAtc == "" {
+		if pkg.Cid == "" {
 			if val.DataType == chief_settings.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
 				channelID = val.Id
 				break
 			}
 		} else { // данные от провайдера тренажера (все RemoteAtc одинаковые, LocalAtc не пустой)
-			if val.DataType == chief_settings.OLDIProvider && val.LocalATC == pkg.LocalAtc && val.RemoteATC == pkg.RemoteAtc {
+			if val.DataType == chief_settings.OLDIProvider && val.LocalATC == pkg.Cid && val.RemoteATC == pkg.RemoteAtc {
 				channelID = val.Id
 				break
 			}
 		}
 	}
-	accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
+
 	if channelID != -1 {
 		if sock, ok := cc.wsClients[channelID]; ok {
-			if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Text)); mrshErr != nil {
+			if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Txt)); mrshErr != nil {
 				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
 			} else {
 				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
@@ -569,14 +378,6 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(pkg fdps.FdpsOldiPackage) {
 	} else {
 		logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s.", pkg.RemoteAtc)
 	}
-
-	// отправка подтверждения
-	cc.OutOldiPacketChan <- accMsg.ToString()
-
-	logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-		fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString())))
-	// cc.LogChan <- fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, fdps.OLDIProvider,
-	// 	fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString()))
 }
 
 // останавливаем каналы с указанным ID
