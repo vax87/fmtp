@@ -6,7 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"fdps/fmtp/chief/chief_settings"
 	pb "fdps/fmtp/chief/proto/fmtp"
+	"fdps/fmtp/chief_configurator"
+	"fdps/fmtp/fmtp_logger"
+	"fdps/go_utils/logger"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -23,15 +27,16 @@ const (
 type fmtpGrpcServerImpl struct {
 	sync.Mutex
 
-	msgToFdps []*pb.Msg
-
-	clntActivity map[string]time.Time // ключ - адрес fdps провайдера, значение - время последней активности
+	msgToFdps    []*pb.Msg
+	clntActivity map[string]time.Time  // ключ - адрес fdps провайдера, значение - время последней активности
+	FromFdpsChan chan pb.MsgWithChanId // канал для приема сообщений от провайдера OLDI
 }
 
 func newFmtpGrpcServerImpl() *fmtpGrpcServerImpl {
 	retValue := fmtpGrpcServerImpl{}
 	retValue.msgToFdps = make([]*pb.Msg, 0)
 	retValue.clntActivity = make(map[string]time.Time)
+	retValue.FromFdpsChan = make(chan pb.MsgWithChanId, 1024)
 	return &retValue
 }
 
@@ -39,20 +44,16 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 	p, _ := peer.FromContext(ctx)
 	s.clntActivity[p.Addr.String()] = time.Now().UTC()
 
-	// \todo обрабатывать собщения для отправки в канал
-	//logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-	//fmt.Sprintf("Получено сообщение от плановой подсистемы: %s.", oldiPkg.Text)))
-
-	//accMsg := fdps.FdpsOldiAcknowledge{Id: pkg.Id}
-	// отправка подтверждения
-	//cc.OutOldiPacketChan <- accMsg.ToString()
-	// logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-	// 	fmt.Sprintf("Плановой подсистеме отправлено подтверждение: %s.", accMsg.ToString())))
-
-	// \todo обрабатывать подтвержденияот плановой
-	// logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-	// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes))))
-
+	for _, val := range msg.List {
+		chId := chief_configurator.ChiefCfg.GetChannelIdByCid(val.Cid)
+		if chId != -1 {
+			s.FromFdpsChan <- pb.MsgWithChanId{PbMsg: val, ChanId: chId}
+		} else {
+			logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s", val.Cid)
+		}
+		logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
+			fmt.Sprintf("Получено сообщение от плановой подсистемы: %s", val.Txt)))
+	}
 	return &pb.SvcResult{Errormessage: ""}, status.New(codes.OK, "").Err()
 }
 

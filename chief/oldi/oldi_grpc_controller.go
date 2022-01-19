@@ -20,8 +20,8 @@ type OldiGrpcController struct {
 	SettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
 	setts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
 
-	FromFdpsChan chan *pb.Msg // канал для приема сообщений от провайдера OLDI
-	ToFdpsChan   chan *pb.Msg // канал для отправки сообщений провайдеру OLDI
+	FromFdpsChan chan pb.MsgWithChanId // канал для приема сообщений от провайдера OLDI
+	ToFdpsChan   chan *pb.Msg          // канал для отправки сообщений провайдеру OLDI
 
 	checkStateTicker      *time.Ticker // тикер для проверки состояния контроллера
 	checkMsgForFdpsTicker *time.Ticker // тикер проверки валидности сообщений для fdps
@@ -37,7 +37,7 @@ type OldiGrpcController struct {
 func NewOldiGrpcController() *OldiGrpcController {
 	return &OldiGrpcController{
 		SettsChan:             make(chan []chief_settings.ProviderSettings, 10),
-		FromFdpsChan:          make(chan *pb.Msg, 1024),
+		FromFdpsChan:          make(chan pb.MsgWithChanId, 1024),
 		ToFdpsChan:            make(chan *pb.Msg, 1024),
 		checkStateTicker:      time.NewTicker(stateTickerInt),
 		checkMsgForFdpsTicker: time.NewTicker(msgValidDur),
@@ -74,13 +74,12 @@ func (c *OldiGrpcController) Work() {
 		case <-testTicker.C:
 			msgId++
 			c.fmtpServer.appendMsg(&pb.Msg{
-				Cid:       "FROM",
-				RemoteAtc: "TOTO",
-				Tp:        "operational",
-				Txt:       fmt.Sprintf("TEST MESSAGE %s", time.Now().UTC().Format("2006-01-02 15:04:05")),
-				Id:        strconv.Itoa(msgId),
-				Rrtime:    timestamppb.New(time.Now().UTC()),
-				Rqtime:    timestamppb.New(time.Now().UTC()),
+				Cid:    "FROM",
+				Tp:     "operational",
+				Txt:    fmt.Sprintf("TEST MESSAGE %s", time.Now().UTC().Format("2006-01-02 15:04:05")),
+				Id:     strconv.Itoa(msgId),
+				Rrtime: timestamppb.New(time.Now().UTC()),
+				Rqtime: timestamppb.New(time.Now().UTC()),
 			})
 
 		// получены новые настройки каналов
@@ -134,6 +133,8 @@ func (c *OldiGrpcController) Work() {
 		case <-c.checkMsgForFdpsTicker.C:
 			c.fmtpServer.cleanOldMsg()
 
+		case msgFromFdps := <-c.fmtpServer.FromFdpsChan:
+			c.FromFdpsChan <- msgFromFdps
 		}
 	}
 }

@@ -1,8 +1,6 @@
 package chief_configurator
 
 import (
-
-	//log_state "fdps/fmtp/chief/chief_logger/state"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
 	"fdps/utils"

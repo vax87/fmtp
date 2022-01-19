@@ -12,6 +12,8 @@ const (
 
 var CommonChiefState ChiefState
 
+var ChannelStatesMap map[string]channel_state.ChannelState // состояние каналов для поиска по cid
+
 type LoggerState struct {
 	LoggerConnected   string `json:"LoggerConnected"`   // признак наличия подключения контроллера к логгеру
 	LoggerDbConnected string `json:"LoggerDbConnected"` // признак подключения логгера к БД
@@ -78,6 +80,11 @@ func SetOldiProviderState(oldiState []ProviderState) {
 func SetChannelsState(channelsState []channel_state.ChannelState) {
 	CommonChiefState.ChannelStates = channelsState
 	checkCommonState()
+
+	ChannelStatesMap = make(map[string]channel_state.ChannelState)
+	for _, v := range channelsState {
+		ChannelStatesMap[v.RemoteName] = v
+	}
 }
 
 func checkCommonState() {

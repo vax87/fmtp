@@ -109,3 +109,12 @@ func (s *ChiefSettings) ProviderSettings(providerType string) []ProviderSettings
 	}
 	return retSetts
 }
+
+func (s *ChiefSettings) GetChannelIdByCid(cid string) int {
+	for _, val := range s.ChannelSetts {
+		if val.RemoteATC == cid {
+			return val.Id
+		}
+	}
+	return -1
+}

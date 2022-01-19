@@ -13,7 +13,9 @@
             "env": {
                 "GOOS": "windows",
                 "GOARC": "amd64"
-            }
+            },
+            "cwd": "${workspaceFolder}/chief",
+            "debugAdapter" : "legacy"
         },
         {            
             "name": "fmtp_channel_x64",
@@ -36,8 +38,7 @@
             "env": {
                 "GOOS": "windows",
                 "GOARC": "amd64"
-            },
-            "args": ["34534", "10", "EYVL", "UMKK", "OLDI", "channel", "13110"]
+            }
         },
         {
             "name": "fmtp_chief_x32",

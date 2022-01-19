@@ -33,10 +33,6 @@ const (
 	srvStateKey        = "WS FMTP каналов. Состояние:"
 	srvStateOkValue    = "Запущен."
 	srvStateErrorValue = "Не запущен."
-	startOldiMsgTag    = "<msg>"
-	endOldiMsgTag      = "</msg>"
-	startOldiAccTag    = "<acc>"
-	endOldiAccTag      = "</acc>"
 )
 
 // сведения об исполняемом файле канала
@@ -58,8 +54,8 @@ type ChiefChannelServer struct {
 	channelSetts     channel_settings.ChannelSettingsWithPort      // текущие настройки каналов и орт для связи с каналами
 	statesSendTicker *time.Ticker                                  // тикер отправки состояния каналов
 
-	FromFdpsPacketChan chan *pb.Msg // канал для приема сообщений от провайдера OLDI
-	ToFdpsPacketChan   chan *pb.Msg // канал для отправки сообщений провайдеру OLDI
+	FromFdpsPacketChan chan pb.MsgWithChanId // канал для приема сообщений от провайдера OLDI
+	ToFdpsPacketChan   chan *pb.Msg          // канал для отправки сообщений провайдеру OLDI
 
 	ChannelBinMap *sync.Map // ключ - идентификатор каналаб значение типа сhannelBin
 
@@ -88,7 +84,7 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 			ChPort:     0,
 		},
 		statesSendTicker:   time.NewTicker(time.Second),
-		FromFdpsPacketChan: make(chan *pb.Msg, 1024),
+		FromFdpsPacketChan: make(chan pb.MsgWithChanId, 1024),
 		ToFdpsPacketChan:   make(chan *pb.Msg, 1024),
 		killerChan:         make(chan struct{}),
 		ChannelBinMap:      new(sync.Map),
@@ -256,11 +252,11 @@ func (cc *ChiefChannelServer) Work() {
 
 					var dataMsg DataMsg
 					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
-						var localAtc, remoteAtc string
+						var remoteAtc string
 						var channelType string
 						for _, val := range cc.channelSetts.ChSettings {
 							if val.Id == dataMsg.ChannelID {
-								localAtc = val.LocalATC
+								//localAtc = val.LocalATC
 								remoteAtc = val.RemoteATC
 								channelType = val.DataType
 								break
@@ -268,11 +264,9 @@ func (cc *ChiefChannelServer) Work() {
 						}
 
 						if channelType == chief_settings.OLDIProvider {
-							//var oldiPkg fdps.FdpsOldiPackage
 							var oldiPkg pb.Msg
 							oldiPkg.Id = strconv.Itoa(cc.oldiIdent)
-							oldiPkg.Cid = localAtc
-							oldiPkg.RemoteAtc = remoteAtc
+							oldiPkg.Cid = remoteAtc
 							oldiPkg.Txt = dataMsg.Text
 
 							cc.oldiIdent++
@@ -344,39 +338,18 @@ func (cc *ChiefChannelServer) Work() {
 }
 
 // ProcessOldiPacket обработка пакета OLDI
-func (cc *ChiefChannelServer) ProcessOldiPacket(pkg *pb.Msg) {
-	var channelID int = -1
+func (cc *ChiefChannelServer) ProcessOldiPacket(msgWithId pb.MsgWithChanId) {
 
-	for _, val := range cc.channelSetts.ChSettings {
-
-		// от OLDI только cid приходит
-		if pkg.Cid == "" {
-			if val.DataType == chief_settings.OLDIProvider && val.RemoteATC == pkg.RemoteAtc {
-				channelID = val.Id
-				break
-			}
-		} else { // данные от провайдера тренажера (все RemoteAtc одинаковые, LocalAtc не пустой)
-			if val.DataType == chief_settings.OLDIProvider && val.LocalATC == pkg.Cid && val.RemoteATC == pkg.RemoteAtc {
-				channelID = val.Id
-				break
-			}
-		}
-	}
-
-	if channelID != -1 {
-		if sock, ok := cc.wsClients[channelID]; ok {
-			if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(channelID, pkg.Txt)); mrshErr != nil {
-				logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v.", mrshErr)
-			} else {
-				if cc.chStates[channelID].ChannelState.FmtpState == chValidStStr {
-					cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
-				}
-			}
+	if sock, ok := cc.wsClients[msgWithId.ChanId]; ok {
+		if oldiData, mrshErr := json.Marshal(CreateChiefDataMsg(msgWithId.ChanId, msgWithId.PbMsg.Txt)); mrshErr != nil {
+			logger.PrintfErr("Ошибка формирования сообщения для FMTP канала. Ошибка: %v", mrshErr)
 		} else {
-			logger.PrintfErr("Не найдено WebSocket соединение канала для отправки сообщения.")
+			if cc.chStates[msgWithId.ChanId].ChannelState.FmtpState == chValidStStr {
+				cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
+			}
 		}
 	} else {
-		logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s.", pkg.RemoteAtc)
+		logger.PrintfErr("Не найдено WebSocket соединение канала для отправки сообщения.")
 	}
 }
 
