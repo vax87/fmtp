@@ -2,6 +2,7 @@ package oldi
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 
 const (
 	providerValidDur = 10 * time.Second
-	msgValidDur      = 30 * time.Second
-	maxMsgToSend     = 10
+	msgValidDur      = 30 * time.Second // время, в течении которого сообщение валидно
+	maxMsgToSend     = 1000             // максимальное кол-во соообщений для отправки провайдеру
 )
 
 // fmtpServerImpl - реализация интерфейса grpc сервера
@@ -52,7 +53,7 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 	// logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
 	// 	fmt.Sprintf("Получено подтверждение от плановой подсистемы: %s.", string(curAccBytes))))
 
-	return nil, status.New(codes.OK, "").Err()
+	return &pb.SvcResult{Errormessage: ""}, status.New(codes.OK, "").Err()
 }
 
 func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.MsgList, error) {
@@ -62,13 +63,20 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 	p, _ := peer.FromContext(ctx)
 	s.clntActivity[p.Addr.String()] = time.Now().UTC()
 
-	toSend := make([]*pb.Msg, maxMsgToSend)
+	toSend := make([]*pb.Msg, 0)
+
+	fmt.Printf("RecvMsq %s. ", time.Now().UTC().Format("2006-01-02 15:04:05"))
+	fmt.Printf("\t s.msgToFdps len: %d. ", len(s.msgToFdps))
+
 	if len(s.msgToFdps) > maxMsgToSend {
 		toSend = append(toSend, s.msgToFdps[:maxMsgToSend]...)
 		s.msgToFdps = s.msgToFdps[maxMsgToSend:]
 	} else {
+		toSend = make([]*pb.Msg, len(s.msgToFdps))
 		copy(toSend, s.msgToFdps)
+		s.msgToFdps = s.msgToFdps[:0]
 	}
+	fmt.Printf("\t toSend len: %d. s.msgToFdps len: %d. \n\n", len(toSend), len(s.msgToFdps))
 
 	return &pb.MsgList{List: toSend}, status.New(codes.OK, "").Err()
 }
@@ -85,25 +93,38 @@ func (s *fmtpGrpcServerImpl) getActiveProviders() []string {
 	return retValue
 }
 
-func (s *fmtpGrpcServerImpl) appendMsg(msg pb.Msg) {
+func (s *fmtpGrpcServerImpl) appendMsg(msg *pb.Msg) {
 	s.Lock()
 	defer s.Unlock()
 
-	s.msgToFdps = append(s.msgToFdps, &msg)
+	s.msgToFdps = append(s.msgToFdps, msg)
 }
 
 func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 	s.Lock()
 	defer s.Unlock()
 
+	maxIdx := -1
+
 	for i, v := range s.msgToFdps {
 		if v.Rrtime.AsTime().Add(msgValidDur).Before(time.Now().UTC()) {
-			s.msgToFdps[i] = s.msgToFdps[len(s.msgToFdps)-1]
-			s.msgToFdps[len(s.msgToFdps)-1] = nil
-			s.msgToFdps = s.msgToFdps[:len(s.msgToFdps)-1]
+			maxIdx = i
 		} else {
 			// раз попался первый с валидным временем, последующие новее
 			break
 		}
 	}
+	fmt.Printf("cleanOldMsg. msgToFdps len: %d, maxIdx: %d", len(s.msgToFdps), maxIdx)
+
+	if maxIdx != -1 {
+		for idx := 0; idx <= maxIdx; idx++ {
+			s.msgToFdps[idx] = nil
+		}
+		if maxIdx == len(s.msgToFdps)-1 {
+			s.msgToFdps = s.msgToFdps[:0]
+		} else {
+			s.msgToFdps = s.msgToFdps[maxIdx+1 : len(s.msgToFdps)]
+		}
+	}
+	fmt.Printf("	clear len: %d \n\n", len(s.msgToFdps))
 }
