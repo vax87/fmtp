@@ -58,8 +58,8 @@ type ChiefChannelServer struct {
 	channelSetts     channel_settings.ChannelSettingsWithPort      // текущие настройки каналов и орт для связи с каналами
 	statesSendTicker *time.Ticker                                  // тикер отправки состояния каналов
 
-	FromFdpsPacketChan chan pb.Msg // канал для приема сообщений от провайдера OLDI
-	ToFdpsPacketChan   chan pb.Msg // канал для отправки сообщений провайдеру OLDI
+	FromFdpsPacketChan chan *pb.Msg // канал для приема сообщений от провайдера OLDI
+	ToFdpsPacketChan   chan *pb.Msg // канал для отправки сообщений провайдеру OLDI
 
 	ChannelBinMap *sync.Map // ключ - идентификатор каналаб значение типа сhannelBin
 
@@ -88,8 +88,8 @@ func NewChiefChannelServer(done chan struct{}, workWithDocker bool) *ChiefChanne
 			ChPort:     0,
 		},
 		statesSendTicker:   time.NewTicker(time.Second),
-		FromFdpsPacketChan: make(chan pb.Msg, 1024),
-		ToFdpsPacketChan:   make(chan pb.Msg, 1024),
+		FromFdpsPacketChan: make(chan *pb.Msg, 1024),
+		ToFdpsPacketChan:   make(chan *pb.Msg, 1024),
 		killerChan:         make(chan struct{}),
 		ChannelBinMap:      new(sync.Map),
 		wsServer:           web_sock.NewWebSockServer(done),
@@ -281,7 +281,7 @@ func (cc *ChiefChannelServer) Work() {
 							}
 							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
 								fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
-							cc.ToFdpsPacketChan <- oldiPkg
+							cc.ToFdpsPacketChan <- &oldiPkg
 						}
 					}
 				}
@@ -344,7 +344,7 @@ func (cc *ChiefChannelServer) Work() {
 }
 
 // ProcessOldiPacket обработка пакета OLDI
-func (cc *ChiefChannelServer) ProcessOldiPacket(pkg pb.Msg) {
+func (cc *ChiefChannelServer) ProcessOldiPacket(pkg *pb.Msg) {
 	var channelID int = -1
 
 	for _, val := range cc.channelSetts.ChSettings {
