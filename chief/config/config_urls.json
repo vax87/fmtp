@@ -1,5 +1,5 @@
 {
-   "HeartbeatUrl": "http://127.0.0.1:2780/api/fmtp",
-   "SettingsUrl": "http://127.0.0.1:2780/api/fmtp",
+   "HeartbeatUrl": "http://192.168.1.27:80/api/fmtp",
+   "SettingsUrl": "http://192.168.1.27:80/api/fmtp",
    "WriteStateToDb": false
 }

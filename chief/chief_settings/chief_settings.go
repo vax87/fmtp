@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"fdps/fmtp/channel/channel_settings"
+	ch_set "fdps/fmtp/channel/channel_settings"
 	"fdps/utils"
 )
 
@@ -47,10 +47,10 @@ type ChiefSettings struct {
 	AodbProviderPort     int    `json:"AodbProviderPort"`     // TCP порт для связи с плановым сервисом (AODB).
 	DockerRegistry       string `json:"DockerRegistry"`       // репозиторий с docker образами каналовы
 
-	LoggerSetts    LoggerSettings                     `json:"LoggerSettings"`
-	ChannelSetts   []channel_settings.ChannelSettings `json:"FmtpDaemons"`
-	ProvidersSetts []ProviderSettings                 `json:"Providers"`
-	IsInitialised  bool                               `json:"-"` // признак инициализации настроек (либо получены от конфигуратора, либо считаны из файла)
+	LoggerSetts    LoggerSettings           `json:"LoggerSettings"`
+	ChannelSetts   []ch_set.ChannelSettings `json:"FmtpDaemons"`
+	ProvidersSetts []ProviderSettings       `json:"Providers"`
+	IsInitialised  bool                     `json:"-"` // признак инициализации настроек (либо получены от конфигуратора, либо считаны из файла)
 }
 
 var chiefSettingsFile = utils.AppPath() + "/config/fmtp_settings.json"

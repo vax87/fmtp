@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	pb "fdps/fmtp/chief/proto/fmtp"
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	address      = "localhost:55544"
-	sendInterval = 3 * time.Second
+	address      = "localhost:55566"
+	sendInterval = 300 * time.Millisecond
 	recvInterval = 300 * time.Millisecond
 )
 
@@ -31,39 +32,56 @@ func main() {
 
 	sendTicker := time.NewTicker(sendInterval)
 	recvTicker := time.NewTicker(recvInterval)
+	msgId := 0
+
+	testTicker := time.NewTicker(1 * time.Millisecond)
+	msgs := pb.MsgList{}
+
+	var sendedCount, receivedCount int64
+
+	beginWorkTime := time.Now().UTC()
 
 	for {
 		select {
 
-		case <-sendTicker.C:
+		case <-testTicker.C:
 			curTime := time.Now().UTC()
 
-			msgs := pb.MsgList{}
-			msgs.List = append(msgs.List,
-				&pb.Msg{
+			for n := 0; n < 10; n++ {
+				msgId++
+				msgs.List = append(msgs.List, &pb.Msg{
 					Cid:    "UIII",
 					Tp:     "operational",
-					Txt:    fmt.Sprintf("TEXT text OLDI text %s", curTime.Format("2006-01-02 15:04:05")),
-					Id:     "12345678",
-					Rrtime: timestamppb.New(curTime.Add(-1 * time.Second)),
-					Rqtime: timestamppb.Now(),
+					Txt:    fmt.Sprintf("MSG TO UIII №%d time: %s", msgId, curTime.Format("2006-01-02 15:04:05")),
+					Id:     strconv.Itoa(msgId),
+					Rrtime: timestamppb.New(curTime),
+					Rqtime: timestamppb.New(curTime),
 				})
 
-			msgs.List = append(msgs.List,
-				&pb.Msg{
+				msgId++
+				msgs.List = append(msgs.List, &pb.Msg{
 					Cid:    "UEEE",
 					Tp:     "operational",
-					Txt:    fmt.Sprintf("TEXT text OLDI text from UEEE %s", curTime.Format("2006-01-02 15:04:05")),
-					Id:     "3432134",
-					Rrtime: timestamppb.New(curTime.Add(-2 * time.Second)),
-					Rqtime: timestamppb.Now(),
+					Txt:    fmt.Sprintf("MSG TO UEEE №%d time: %s", msgId, curTime.Format("2006-01-02 15:04:05")),
+					Id:     strconv.Itoa(msgId),
+					Rrtime: timestamppb.New(curTime),
+					Rqtime: timestamppb.New(curTime),
 				})
+			}
 
+		case <-sendTicker.C:
 			r, err := gc.SendMsg(context.Background(), &msgs)
 			if err != nil {
 				log.Printf("Error SendMsg: %v", err)
 			}
 			log.Printf("SendMsg result %s ", r.String())
+			sendedCount += int64(len(msgs.List))
+
+			msgs.List = msgs.List[:0]
+
+			if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
+				fmt.Printf("sendCount: %d. SendPerSecond: %f \n", sendedCount, float64(sendedCount)/diffTime)
+			}
 
 		case <-recvTicker.C:
 			curTime := time.Now().UTC()
@@ -80,6 +98,10 @@ func main() {
 				} else {
 					fmt.Println("\t empty list \n\n")
 				}
+				receivedCount += int64(len(r.List))
+			}
+			if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
+				fmt.Printf("receivedCount: %d. RecvPerSecond: %f \n", receivedCount, float64(receivedCount)/diffTime)
 			}
 		}
 	}

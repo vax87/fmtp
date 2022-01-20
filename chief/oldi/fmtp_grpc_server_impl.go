@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	providerValidDur = 10 * time.Second
+	providerValidDur = 10 * time.Second // время, после которого, если не приходят сообщения от провайдера, то считаем его недоступным
 	msgValidDur      = 30 * time.Second // время, в течении которого сообщение валидно
 	maxMsgToSend     = 1000             // максимальное кол-во соообщений для отправки провайдеру
 )
@@ -43,18 +43,21 @@ func newFmtpGrpcServerImpl() *fmtpGrpcServerImpl {
 func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.SvcResult, error) {
 	p, _ := peer.FromContext(ctx)
 	s.clntActivity[p.Addr.String()] = time.Now().UTC()
+	var errorString string
 
 	for _, val := range msg.List {
 		chId := chief_configurator.ChiefCfg.GetChannelIdByCid(val.Cid)
 		if chId != -1 {
 			s.FromFdpsChan <- pb.MsgWithChanId{PbMsg: val, ChanId: chId}
 		} else {
-			logger.PrintfErr("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s", val.Cid)
+			errNoChannel := fmt.Sprintf("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s", val.Cid)
+			errorString += errNoChannel + "\n"
+			logger.PrintfErr(errNoChannel)
 		}
 		logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
 			fmt.Sprintf("Получено сообщение от плановой подсистемы: %s", val.Txt)))
 	}
-	return &pb.SvcResult{Errormessage: ""}, status.New(codes.OK, "").Err()
+	return &pb.SvcResult{Errormessage: errorString}, status.New(codes.OK, "").Err()
 }
 
 func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.MsgList, error) {

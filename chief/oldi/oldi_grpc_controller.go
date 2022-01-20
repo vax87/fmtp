@@ -4,21 +4,18 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"time"
 
-	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
 	pb "fdps/fmtp/chief/proto/fmtp"
+	chief_cfg "fdps/fmtp/chief_configurator"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // OldiGrpcController контроллер для работы с провайдером OLDI по GRPC
 type OldiGrpcController struct {
-	SettsChan chan []chief_settings.ProviderSettings // канал для приема настроек провайдеров
-	setts     []chief_settings.ProviderSettings      // текущие настройки провайдеров
+	SettsChangedChan chan struct{} // канал для приема настроек провайдеров
 
 	FromFdpsChan chan pb.MsgWithChanId // канал для приема сообщений от провайдера OLDI
 	ToFdpsChan   chan *pb.Msg          // канал для отправки сообщений провайдеру OLDI
@@ -26,74 +23,58 @@ type OldiGrpcController struct {
 	checkStateTicker      *time.Ticker // тикер для проверки состояния контроллера
 	checkMsgForFdpsTicker *time.Ticker // тикер проверки валидности сообщений для fdps
 
-	grpcServer *grpc.Server
-	fmtpServer *fmtpGrpcServerImpl
-	grpcPort   int
-
-	providerEncoding string
+	grpcServer  *grpc.Server
+	fmtpServer  *fmtpGrpcServerImpl
+	grpcAddress string
+	grpsServed  bool
 }
 
 // NewGrpcController конструктор
 func NewOldiGrpcController() *OldiGrpcController {
 	return &OldiGrpcController{
-		SettsChan:             make(chan []chief_settings.ProviderSettings, 10),
+		SettsChangedChan:      make(chan struct{}, 10),
 		FromFdpsChan:          make(chan pb.MsgWithChanId, 1024),
 		ToFdpsChan:            make(chan *pb.Msg, 1024),
 		checkStateTicker:      time.NewTicker(stateTickerInt),
 		checkMsgForFdpsTicker: time.NewTicker(msgValidDur),
 		fmtpServer:            newFmtpGrpcServerImpl(),
+		grpsServed:            false,
 	}
 }
 
 func (c *OldiGrpcController) startGrpcServer() {
-	lis, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.grpcPort))
+	lis, err := net.Listen("tcp4", c.grpcAddress)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	c.grpcServer = grpc.NewServer()
 	pb.RegisterFmtpServiceServer(c.grpcServer, c.fmtpServer)
-
+	c.grpsServed = true
 	if err := c.grpcServer.Serve(lis); err != nil {
+		c.grpsServed = false
 		log.Fatalf("failed to serve: %v", err)
 	}
 }
 
 func (c *OldiGrpcController) stopGrpcServer() {
-	//c.grpcServer.GracefulStop()
+	c.grpcServer.Stop()
 }
 
 // Work реализация работы
 func (c *OldiGrpcController) Work() {
 
-	testTicker := time.NewTicker(1 * time.Millisecond)
-	msgId := 0
-
 	for {
 		select {
 
-		case <-testTicker.C:
-			msgId++
-			c.fmtpServer.appendMsg(&pb.Msg{
-				Cid:    "FROM",
-				Tp:     "operational",
-				Txt:    fmt.Sprintf("TEST MESSAGE %s", time.Now().UTC().Format("2006-01-02 15:04:05")),
-				Id:     strconv.Itoa(msgId),
-				Rrtime: timestamppb.New(time.Now().UTC()),
-				Rqtime: timestamppb.New(time.Now().UTC()),
-			})
-
 		// получены новые настройки каналов
-		case c.setts = <-c.SettsChan:
-			var localPort int
-			for _, val := range c.setts {
-				localPort = val.LocalPort
-				c.providerEncoding = val.ProviderEncoding
-			}
+		case <-c.SettsChangedChan:
+			newGrpcAddress := fmt.Sprintf(":%d", chief_cfg.ChiefCfg.OldiProviderPort)
 
-			if c.grpcPort != localPort {
-				c.grpcPort = localPort
-
-				c.stopGrpcServer()
+			if newGrpcAddress != c.grpcAddress {
+				c.grpcAddress = newGrpcAddress
+				if c.grpsServed {
+					c.stopGrpcServer()
+				}
 				go c.startGrpcServer()
 			}
 
@@ -107,7 +88,7 @@ func (c *OldiGrpcController) Work() {
 
 			activeProviders := c.fmtpServer.getActiveProviders()
 
-			for _, val := range c.setts {
+			for _, val := range chief_cfg.ChiefCfg.ProvidersSetts {
 				curState := chief_state.ProviderState{
 					ProviderID:    val.ID,
 					ProviderType:  val.DataType,
