@@ -34,7 +34,7 @@ func main() {
 	recvTicker := time.NewTicker(recvInterval)
 	msgId := 0
 
-	testTicker := time.NewTicker(1 * time.Millisecond)
+	testTicker := time.NewTicker(200 * time.Millisecond)
 	msgs := pb.MsgList{}
 
 	var sendedCount, receivedCount int64

@@ -41,44 +41,48 @@ func oraUpdateChannelStateQuery(chState channel_state.ChannelState) string {
 }
 
 // текст запроса добавления сообщения журнала в БД.
-func oraInsertLogQuery(logMessage fmtp_logger.LogMessage) string {
-	queryText := "INSERT ALL "
+func oraInsertLogQuery(logMsgs ...fmtp_logger.LogMessage) string {
+	var queryText strings.Builder
 
-	queryText += fmt.Sprintf(`INTO %s
+	queryText.WriteString("INSERT ALL ")
+
+	for _, val := range logMsgs {
+		queryText.WriteString(fmt.Sprintf(`INTO %s
 		 (CntrlIP, DaemonID, LocalName, RemoteName, DataType, Source, Severity, FmtpType, Direction, DateTime, Text)
 		 VALUES ('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s') `,
-		onlineLogTableName,
-		logMessage.ControllerIP,
-		logMessage.ChannelId,
-		logMessage.ChannelLocName,
-		logMessage.ChannelRemName,
-		logMessage.DataType,
-		logMessage.Source,
-		logMessage.Severity,
-		logMessage.FmtpType,
-		logMessage.Direction,
-		logMessage.DateTime,
-		logMessage.Text)
+			onlineLogTableName,
+			val.ControllerIP,
+			val.ChannelId,
+			val.ChannelLocName,
+			val.ChannelRemName,
+			val.DataType,
+			val.Source,
+			val.Severity,
+			val.FmtpType,
+			val.Direction,
+			val.DateTime,
+			val.Text))
 
-	queryText += fmt.Sprintf(`INTO %s 
+		queryText.WriteString(fmt.Sprintf(`INTO %s 
 		(CntrlIP, DaemonID, LocalName, RemoteName, DataType, Source, Severity, FmtpType, Direction, DateTime, Text) 
 		VALUES ('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s') `,
-		storageLogTableName,
-		logMessage.ControllerIP,
-		logMessage.ChannelId,
-		logMessage.ChannelLocName,
-		logMessage.ChannelRemName,
-		logMessage.DataType,
-		logMessage.Source,
-		logMessage.Severity,
-		logMessage.FmtpType,
-		logMessage.Direction,
-		logMessage.DateTime,
-		logMessage.Text)
+			storageLogTableName,
+			val.ControllerIP,
+			val.ChannelId,
+			val.ChannelLocName,
+			val.ChannelRemName,
+			val.DataType,
+			val.Source,
+			val.Severity,
+			val.FmtpType,
+			val.Direction,
+			val.DateTime,
+			val.Text))
+	}
+	queryText.WriteString(" SELECT 1 FROM dual")
 
-	queryText += " SELECT 1 FROM dual"
-
-	return queryText
+	//fmt.Println(queryText.String())
+	return queryText.String()
 }
 
 // текст запроса проверки подключени к БД.
