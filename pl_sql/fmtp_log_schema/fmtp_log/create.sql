@@ -128,9 +128,9 @@ create or replace PACKAGE LOG_PROC_PKG AS
     );
     
     --проверка кол-ва логов
-    PROCEDURE CHECK_LOG_COUNT( MAX_ONLINE_LOG_COUNT IN NUMBER,	MAX_STORAGE_LOG_COUNT IN NUMBER	);
+    procedure check_log_count( max_online_log_count in number,	max_storage_log_count in number	);
     --проверка времени хранения логов
-    PROCEDURE CHECK_LOG_LIFETIME( OLDEST_STORAGE_LOG_DATE IN FMTP_STORAGE.DATETIME%TYPE);
+    procedure check_log_lifetime( oldest_storage_log_date in fmtp_storage.datetime%type);
     --обновление состояния канала
     procedure  channel_state_changed( chstate in channel_state );
 END;
@@ -142,32 +142,32 @@ COMMIT;
 
 create or replace PACKAGE BODY LOG_PROC_PKG AS
 	--проверка кол-ва логов
-	PROCEDURE CHECK_LOG_COUNT( MAX_ONLINE_LOG_COUNT IN NUMBER,	MAX_STORAGE_LOG_COUNT IN NUMBER	)
-	AS
-		CUR_ONLINE_LOG_COUNT   NUMBER;
-		CUR_STORAGE_LOG_COUNT   NUMBER;
-       MIN_ONLINE_LOG_ID   FMTP_ONLINE.DATETIME%TYPE;
-       MIN_STORAGE_LOG_ID   FMTP_STORAGE.DATETIME%TYPE;
-	BEGIN
-		SELECT COUNT(*) INTO CUR_ONLINE_LOG_COUNT FROM FMTP_ONLINE;
-		IF CUR_ONLINE_LOG_COUNT > MAX_ONLINE_LOG_COUNT THEN
-       	SELECT MIN(LOGID) INTO MIN_ONLINE_LOG_ID FROM FMTP_ONLINE;
-			DELETE FROM FMTP_ONLINE WHERE LOGID < (MIN_ONLINE_LOG_ID + CUR_ONLINE_LOG_COUNT - MAX_ONLINE_LOG_COUNT);
-		END IF;
-		SELECT COUNT(*) INTO CUR_STORAGE_LOG_COUNT FROM FMTP_ONLINE;
-		IF CUR_STORAGE_LOG_COUNT > MAX_STORAGE_LOG_COUNT THEN
-       	SELECT MIN(LOGID) INTO MIN_STORAGE_LOG_ID FROM FMTP_STORAGE;
-			DELETE FROM FMTP_STORAGE WHERE LOGID < (MIN_STORAGE_LOG_ID + CUR_STORAGE_LOG_COUNT - MAX_STORAGE_LOG_COUNT);
-		END IF;
-	END CHECK_LOG_COUNT;
+	procedure check_log_count( max_online_log_count in number,	max_storage_log_count in number	)
+	as
+		cur_online_log_count   number;
+		cur_storage_log_count   number;
+       min_online_log_id   fmtp_online.datetime%type;
+       min_storage_log_id   fmtp_storage.datetime%type;
+	begin
+		select count(*) into cur_online_log_count from fmtp_online;
+		if cur_online_log_count > max_online_log_count then
+       	select min(logid) into min_online_log_id from fmtp_online;
+			delete from fmtp_online where logid < (min_online_log_id + cur_online_log_count - max_online_log_count);
+		end if;
+		select count(*) into cur_storage_log_count from fmtp_storage;
+		if cur_storage_log_count > max_storage_log_count then
+       	select min(logid) into min_storage_log_id from fmtp_storage;
+			delete from fmtp_storage where logid < (min_storage_log_id + cur_storage_log_count - max_storage_log_count);
+		end if;
+	end check_log_count;
     
     
    --проверка времени хранения логов 
-   PROCEDURE CHECK_LOG_LIFETIME( OLDEST_STORAGE_LOG_DATE IN FMTP_STORAGE.DATETIME%TYPE)
-   AS
-   BEGIN
-   	DELETE FROM FMTP_STORAGE WHERE DATETIME < OLDEST_STORAGE_LOG_DATE;
-   END CHECK_LOG_LIFETIME;
+   procedure check_log_lifetime( oldest_storage_log_date in fmtp_storage.datetime%type)
+   as
+   begin
+   	delete from fmtp_storage where datetime < oldest_storage_log_date;
+   end check_log_lifetime;
    
    
    
