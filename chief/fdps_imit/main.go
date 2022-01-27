@@ -13,6 +13,8 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	"google.golang.org/grpc"
+
+	prom_metrics "fdps/fmtp/chief/fdps_imit/prom"
 )
 
 const (
@@ -38,15 +40,11 @@ func main() {
 	testTicker := time.NewTicker(700 * time.Millisecond)
 	msgs := pb.MsgList{}
 
-	var sendedCount, receivedCount int64
-
-	//beginWorkTime := time.Now().UTC()
-
 	var expectBuffer []*pb.Msg
 	checkExpectedTicker := time.NewTicker(sendInterval * 3)
 	var expectMutex sync.Mutex
 
-	var missedIdsCount int64
+	go prom_metrics.Work(":9100")
 
 	for {
 		select {
@@ -90,7 +88,7 @@ func main() {
 				log.Printf("Error SendMsg: %v", err)
 			}
 			//log.Printf("SendMsg result %s ", r.String())
-			sendedCount += int64(len(msgs.List))
+			prom_metrics.AddMsgSendCount(len(msgs.List))
 
 			msgs.List = msgs.List[:0]
 
@@ -114,7 +112,7 @@ func main() {
 				// } else {
 				// 	fmt.Println("\t empty list \n\n")
 				// }
-				receivedCount += int64(len(r.List))
+				prom_metrics.AddMsgRecvCount(len(r.List))
 
 				for _, v := range r.List {
 					expectMutex.Lock()
@@ -155,13 +153,12 @@ func main() {
 			}
 
 			if maxDelIdx != -1 {
-				missedIdsCount += int64(maxDelIdx)
+				prom_metrics.AddMsgMissedCount(maxDelIdx)
 				if maxDelIdx < len(expectBuffer)-1 {
 					expectBuffer = expectBuffer[maxDelIdx+1:]
 				} else {
 					expectBuffer = expectBuffer[:len(expectBuffer)-1]
 				}
-				log.Printf("!!!!percent expected and not received %f", (float64(missedIdsCount)/float64(msgId))*100.0)
 			}
 
 			expectMutex.Unlock()
