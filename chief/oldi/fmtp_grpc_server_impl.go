@@ -3,6 +3,7 @@ package oldi
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -42,7 +43,9 @@ func newFmtpGrpcServerImpl() *fmtpGrpcServerImpl {
 
 func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.SvcResult, error) {
 	p, _ := peer.FromContext(ctx)
-	s.clntActivity[p.Addr.String()] = time.Now().UTC()
+	if host, _, err := net.SplitHostPort(p.Addr.String()); err == nil {
+		s.clntActivity[host] = time.Now().UTC()
+	}
 	var errorString string
 
 	for _, val := range msg.List {
@@ -65,7 +68,9 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 	defer s.Unlock()
 
 	p, _ := peer.FromContext(ctx)
-	s.clntActivity[p.Addr.String()] = time.Now().UTC()
+	if host, _, err := net.SplitHostPort(p.Addr.String()); err == nil {
+		s.clntActivity[host] = time.Now().UTC()
+	}
 
 	toSend := make([]*pb.Msg, 0)
 

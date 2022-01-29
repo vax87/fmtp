@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	address      = "localhost:55566"
+	address      = ":55566"
 	sendInterval = 300 * time.Millisecond
 	recvInterval = 300 * time.Millisecond
 )
@@ -50,8 +50,10 @@ func main() {
 		select {
 
 		case <-testTicker.C:
+			//fmt.Println("<-testTicker.C: BEGIN")
 			curTime := time.Now().UTC()
 
+			expectMutex.Lock()
 			for n := 0; n < 10; n++ {
 				msgId++
 				msg1 := pb.Msg{
@@ -72,31 +74,44 @@ func main() {
 					Rrtime: timestamppb.New(curTime),
 					Rqtime: timestamppb.New(curTime),
 				}
-				expectMutex.Lock()
 
 				expectBuffer = append(expectBuffer, &msg1)
 				msgs.List = append(msgs.List, &msg1)
 				expectBuffer = append(expectBuffer, &msg2)
 				msgs.List = append(msgs.List, &msg2)
 
-				expectMutex.Unlock()
 			}
+			expectMutex.Unlock()
+			//fmt.Println("<-testTicker.C: END")
 
 		case <-sendTicker.C:
-			_, err := gc.SendMsg(context.Background(), &msgs)
-			if err != nil {
-				log.Printf("Error SendMsg: %v", err)
+			//fmt.Println("<-sendTicker.C: BEGIN")
+			if len(msgs.List) > 0 {
+				expectMutex.Lock()
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
+				defer cancel()
+				_, err := gc.SendMsg(ctx, &msgs)
+				if err != nil {
+					log.Printf("Error SendMsg: %v", err)
+				} else {
+					//log.Printf("SendMsg result %s ", r.String())
+					//fmt.Println("AddMsgSendCount BEGIN")
+					prom_metrics.AddMsgSendCount(len(msgs.List))
+					//fmt.Println("AddMsgSendCount END")
+					msgs.List = msgs.List[:0]
+				}
+				expectMutex.Unlock()
+			} else {
+				fmt.Println("empty list")
 			}
-			//log.Printf("SendMsg result %s ", r.String())
-			prom_metrics.AddMsgSendCount(len(msgs.List))
-
-			msgs.List = msgs.List[:0]
+			//fmt.Println("<-sendTicker.C: END")
 
 			// if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
 			// 	fmt.Printf("sendCount: %d. SendPerSecond: %f \n", sendedCount, float64(sendedCount)/diffTime)
 			// }
 
 		case <-recvTicker.C:
+			//fmt.Println("<-recvTicker.C: BEGIN")
 			curTime := time.Now().UTC()
 
 			r, err := gc.RecvMsq(context.Background(), &pb.SvcReq{Data: fmt.Sprintf("any data. recv time: %s ", curTime.Format("2006-01-02 15:04:05"))})
@@ -112,10 +127,10 @@ func main() {
 				// } else {
 				// 	fmt.Println("\t empty list \n\n")
 				// }
+				expectMutex.Lock()
 				prom_metrics.AddMsgRecvCount(len(r.List))
 
 				for _, v := range r.List {
-					expectMutex.Lock()
 
 				EXPECT:
 					for idx := range expectBuffer {
@@ -129,15 +144,16 @@ func main() {
 						}
 					}
 
-					expectMutex.Unlock()
 				}
+				expectMutex.Unlock()
 			}
+			//fmt.Println("<-recvTicker.C: END")
 			// if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
 			// 	fmt.Printf("receivedCount: %d. RecvPerSecond: %f \n", receivedCount, float64(receivedCount)/diffTime)
 			// }
 
 		case <-checkExpectedTicker.C:
-
+			//fmt.Println("<-checkExpectedTicker.C: BEGIN")
 			expectMutex.Lock()
 			maxDelIdx := -1
 			for idx, v := range expectBuffer {
@@ -162,8 +178,7 @@ func main() {
 			}
 
 			expectMutex.Unlock()
-
+			//fmt.Println("<-checkExpectedTicker.C: END")
 		}
 	}
-
 }

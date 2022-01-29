@@ -5,68 +5,86 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
+
+	"fdps/utils"
 )
 
+func getIpAddr() (localAddr string) {
+	for _, v := range utils.GetLocalIpv4List() {
+		localAddr += v + " "
+	}
+	return
+}
+
 var (
-	countMsgSend = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "count_send",
-			Help:      "Кол-во отправленных FMTP сообщений",
+	curIP = getIpAddr()
+
+	countMsgSend = prom.NewCounter(
+		prom.CounterOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "count_send",
+			Help:        "Кол-во отправленных FMTP сообщений",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	countMsgRecv = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "count_recv",
-			Help:      "Кол-во полученных FMTP сообщений",
+	countMsgRecv = prom.NewCounter(
+		prom.CounterOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "count_recv",
+			Help:        "Кол-во полученных FMTP сообщений",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	msgSendPerSecond = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "count_send_per_second",
-			Help:      "Кол-во отправленных FMTP сообщений в секунду",
+	msgSendPerSecond = prom.NewGauge(
+		prom.GaugeOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "count_send_per_second",
+			Help:        "Кол-во отправленных FMTP сообщений в секунду",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	msgRecvPerSecond = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "count_recv_per_second",
-			Help:      "Кол-во полученных FMTP сообщений в секунду",
+	msgRecvPerSecond = prom.NewGauge(
+		prom.GaugeOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "count_recv_per_second",
+			Help:        "Кол-во полученных FMTP сообщений в секунду",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	countMsgMissed = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "count_missed",
-			Help:      "Кол-во отправленных и не принятых FMTP сообщений",
+	countMsgMissed = prom.NewCounter(
+		prom.CounterOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "count_missed",
+			Help:        "Кол-во отправленных и не принятых FMTP сообщений",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	avgSendPerSecond = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "avg_send_per_second",
-			Help:      "В среднем отправлено FMTP сообщений в секунду",
+	avgSendPerSecond = prom.NewGauge(
+		prom.GaugeOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "avg_send_per_second",
+			Help:        "В среднем отправлено FMTP сообщений в секунду",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	avgRecvPerSecond = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "fmtp",
-			Subsystem: "fdps_imit",
-			Name:      "avg_recv_per_second",
-			Help:      "В среднем получено FMTP сообщений в секунду",
+	avgRecvPerSecond = prom.NewGauge(
+		prom.GaugeOpts{
+			Namespace:   "fmtp",
+			Subsystem:   "fdps_imit",
+			Name:        "avg_recv_per_second",
+			Help:        "В среднем получено FMTP сообщений в секунду",
+			ConstLabels: prom.Labels{"host": curIP},
 		})
 
-	registry = prometheus.NewRegistry()
+	registry = prom.NewRegistry()
 )
 
 var metricsMutex sync.Mutex
@@ -83,7 +101,11 @@ func init() {
 		avgSendPerSecond,
 		avgRecvPerSecond)
 
-	pusher = push.New("http://192.168.1.24:9100", "pushgateway").Gatherer(registry)
+	// from lemz
+	//pusher = push.New("http://192.168.1.24:9100", "pushgateway").Gatherer(registry)
+	// from home
+	pusher = push.New("http://127.0.0.1:9100", "pushgateway").Gatherer(registry)
+
 }
 
 func AddMsgSendCount(sendCount int) {
