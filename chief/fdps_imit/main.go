@@ -14,13 +14,19 @@ import (
 
 	"google.golang.org/grpc"
 
-	prom_metrics "fdps/fmtp/chief/fdps_imit/prom"
+	prom_metrics "fdps/go_utils/prom_metrics"
 )
 
 const (
 	address      = ":55566"
 	sendInterval = 300 * time.Millisecond
 	recvInterval = 300 * time.Millisecond
+)
+
+const (
+	metricSend   = "send"
+	metricRecv   = "recv"
+	metricMissed = "missed"
 )
 
 func main() {
@@ -37,20 +43,37 @@ func main() {
 	recvTicker := time.NewTicker(recvInterval)
 	var msgId int64
 
-	testTicker := time.NewTicker(700 * time.Millisecond)
+	testTicker := time.NewTicker(70 * time.Millisecond)
 	msgs := pb.MsgList{}
 
 	var expectBuffer []*pb.Msg
 	checkExpectedTicker := time.NewTicker(sendInterval * 3)
 	var expectMutex sync.Mutex
 
-	go prom_metrics.Work(":9100")
+	/////////////////////////////////////////////////////////////////////////
+
+	prom_metrics.SetSettings(prom_metrics.PusherSettings{
+		PusherIntervalSec: 1,
+		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
+		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
+		GatewayJob:       "test",
+		CollectNamespace: "fmtp",
+		CollectSubsystem: "fdps_imit",
+		CollectLabels:    map[string]string{"host": "192.168.10.219"},
+	})
+
+	prom_metrics.AppendCounter(metricSend, "Кол-во отправленных FMTP сообщений")
+	prom_metrics.AppendCounter(metricRecv, "Кол-во полученных FMTP сообщений")
+	prom_metrics.AppendCounter(metricMissed, "Кол-во отправленных, но не принятых FMTP сообщений")
+
+	prom_metrics.Initialize()
+
+	/////////////////////////////////////////////////////////////////////////
 
 	for {
 		select {
 
 		case <-testTicker.C:
-			//fmt.Println("<-testTicker.C: BEGIN")
 			curTime := time.Now().UTC()
 
 			expectMutex.Lock()
@@ -82,10 +105,8 @@ func main() {
 
 			}
 			expectMutex.Unlock()
-			//fmt.Println("<-testTicker.C: END")
 
 		case <-sendTicker.C:
-			//fmt.Println("<-sendTicker.C: BEGIN")
 			if len(msgs.List) > 0 {
 				expectMutex.Lock()
 				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
@@ -94,31 +115,21 @@ func main() {
 				if err != nil {
 					log.Printf("Error SendMsg: %v", err)
 				} else {
-					//log.Printf("SendMsg result %s ", r.String())
-					//fmt.Println("AddMsgSendCount BEGIN")
-					prom_metrics.AddMsgSendCount(len(msgs.List))
-					//fmt.Println("AddMsgSendCount END")
+					prom_metrics.AddToCollector(metricSend, len(msgs.List))
 					msgs.List = msgs.List[:0]
 				}
 				expectMutex.Unlock()
 			} else {
 				fmt.Println("empty list")
 			}
-			//fmt.Println("<-sendTicker.C: END")
-
-			// if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
-			// 	fmt.Printf("sendCount: %d. SendPerSecond: %f \n", sendedCount, float64(sendedCount)/diffTime)
-			// }
 
 		case <-recvTicker.C:
-			//fmt.Println("<-recvTicker.C: BEGIN")
 			curTime := time.Now().UTC()
 
 			r, err := gc.RecvMsq(context.Background(), &pb.SvcReq{Data: fmt.Sprintf("any data. recv time: %s ", curTime.Format("2006-01-02 15:04:05"))})
 			if err != nil {
 				log.Printf("Error RecvMsq: %v", err)
 			}
-			// fmt.Printf("RecvMsq result %s. ", time.Now().UTC().Format("2006-01-02 15:04:05"))
 
 			if r != nil {
 				// if len(r.List) > 0 {
@@ -128,7 +139,7 @@ func main() {
 				// 	fmt.Println("\t empty list \n\n")
 				// }
 				expectMutex.Lock()
-				prom_metrics.AddMsgRecvCount(len(r.List))
+				prom_metrics.AddToCollector(metricRecv, len(r.List))
 
 				for _, v := range r.List {
 
@@ -147,13 +158,8 @@ func main() {
 				}
 				expectMutex.Unlock()
 			}
-			//fmt.Println("<-recvTicker.C: END")
-			// if diffTime := time.Now().UTC().Sub(beginWorkTime).Seconds(); diffTime > 0 {
-			// 	fmt.Printf("receivedCount: %d. RecvPerSecond: %f \n", receivedCount, float64(receivedCount)/diffTime)
-			// }
 
 		case <-checkExpectedTicker.C:
-			//fmt.Println("<-checkExpectedTicker.C: BEGIN")
 			expectMutex.Lock()
 			maxDelIdx := -1
 			for idx, v := range expectBuffer {
@@ -169,7 +175,7 @@ func main() {
 			}
 
 			if maxDelIdx != -1 {
-				prom_metrics.AddMsgMissedCount(maxDelIdx)
+				prom_metrics.AddToCollector(metricMissed, maxDelIdx)
 				if maxDelIdx < len(expectBuffer)-1 {
 					expectBuffer = expectBuffer[maxDelIdx+1:]
 				} else {
@@ -178,7 +184,6 @@ func main() {
 			}
 
 			expectMutex.Unlock()
-			//fmt.Println("<-checkExpectedTicker.C: END")
 		}
 	}
 }

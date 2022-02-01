@@ -57,8 +57,6 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 			errorString += errNoChannel + "\n"
 			logger.PrintfErr(errNoChannel)
 		}
-		logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
-			fmt.Sprintf("Получено сообщение от плановой подсистемы: %s", val.Txt)))
 	}
 	return &pb.SvcResult{Errormessage: errorString}, status.New(codes.OK, "").Err()
 }
@@ -74,9 +72,6 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 
 	toSend := make([]*pb.Msg, 0)
 
-	fmt.Printf("RecvMsq %s. ", time.Now().UTC().Format("2006-01-02 15:04:05"))
-	fmt.Printf("\t s.msgToFdps len: %d. ", len(s.msgToFdps))
-
 	if len(s.msgToFdps) > maxMsgToSend {
 		toSend = append(toSend, s.msgToFdps[:maxMsgToSend]...)
 		s.msgToFdps = s.msgToFdps[maxMsgToSend:]
@@ -85,8 +80,6 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 		copy(toSend, s.msgToFdps)
 		s.msgToFdps = s.msgToFdps[:0]
 	}
-	fmt.Printf("\t toSend len: %d. s.msgToFdps len: %d. \n\n", len(toSend), len(s.msgToFdps))
-
 	return &pb.MsgList{List: toSend}, status.New(codes.OK, "").Err()
 }
 
@@ -115,15 +108,16 @@ func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 
 	maxIdx := -1
 
-	for i, v := range s.msgToFdps {
-		if v.Rrtime.AsTime().Add(msgValidDur).Before(time.Now().UTC()) {
-			maxIdx = i
+	for idx, val := range s.msgToFdps {
+		if val.Rrtime.AsTime().Add(msgValidDur).Before(time.Now().UTC()) {
+			maxIdx = idx
+			logger.PrintfWarn("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityWarning, chief_settings.OLDIProvider,
+				fmt.Sprintf("Сообщение удалено из очереди на отправку провайдеру по истечении 30 сек.: %s", val.Txt)))
 		} else {
 			// раз попался первый с валидным временем, последующие новее
 			break
 		}
 	}
-	fmt.Printf("cleanOldMsg. msgToFdps len: %d, maxIdx: %d", len(s.msgToFdps), maxIdx)
 
 	if maxIdx != -1 {
 		for idx := 0; idx <= maxIdx; idx++ {
@@ -135,5 +129,4 @@ func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 			s.msgToFdps = s.msgToFdps[maxIdx+1 : len(s.msgToFdps)]
 		}
 	}
-	fmt.Printf("	clear len: %d \n\n", len(s.msgToFdps))
 }
