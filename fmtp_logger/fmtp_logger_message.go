@@ -1,6 +1,9 @@
 package fmtp_logger
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	SeverityDebug   string = "Отладка"        // серьезность DEBUG.
@@ -53,6 +56,10 @@ type LogMessage struct {
 	DateTime       string `json:"DateTime"`     // дата и время сообщения.
 }
 
+func (lm LogMessage) MarshalBinary() ([]byte, error) {
+	return json.Marshal(lm)
+}
+
 // сообщение журнала с цветом
 type LogMessageWithColor struct {
 	LogMessage
@@ -93,7 +100,6 @@ func CreateControllerMessage(severity string, text string) LogMessage {
 	retValue.DateTime = time.Now().UTC().Format(LogTimeFormat) //"2006-01-02 15:04:05.333")
 	return retValue
 }
-
 
 // LogChannelST сообщение с использование ST (Severity-Text)
 func LogChannelST(severity string, text string) LogMessage {

@@ -7,23 +7,24 @@ import (
 	"fdps/fmtp/fmtp_logger"
 
 	"fdps/fmtp/chief/chief_settings"
-	"fdps/fmtp/chief/chief_state"
 
 	"fdps/go_utils/logger"
 )
 
 // ChiefLogger логгер, записывающий сообщения в БД
 type ChiefLogger struct {
-	SettsChan      chan chief_settings.LoggerSettings
-	oracleLogCntrl *OracleLoggerController // контроллер записи в БД oracle
-	minSeverity    logger.Severity
+	SettsChan chan chief_settings.LoggerSettings
+	//oracleLogCntrl *OracleLoggerController // контроллер записи в БД oracle
+	redisLogCntrl *RedisLogController
+	minSeverity   logger.Severity
 }
 
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
-		SettsChan:      make(chan chief_settings.LoggerSettings, 1),
-		oracleLogCntrl: NewOracleController(),
-		minSeverity:    logger.SevInfo,
+		SettsChan: make(chan chief_settings.LoggerSettings, 1),
+		//oracleLogCntrl: NewOracleController(),
+		redisLogCntrl: NewRedisController(),
+		minSeverity:   logger.SevInfo,
 	}
 }
 
@@ -36,24 +37,37 @@ func (cl *ChiefLogger) Work() {
 	// свой формат вывода логов на web страницу
 	fmtp_logger.SetUserLogFormatForWeb()
 
-	go cl.oracleLogCntrl.Run()
+	//go cl.oracleLogCntrl.Run()
+	go cl.redisLogCntrl.Run()
 
 	for {
 		select {
 
-		case newSetts := <-cl.SettsChan:
-			cl.oracleLogCntrl.SettingsChan <- OracleLoggerSettings{
-				Hostname:         newSetts.DbHostname,
-				Port:             newSetts.DbPort,
-				ServiceName:      newSetts.DbServiceName,
-				UserName:         newSetts.DbUser,
-				Password:         newSetts.DbPassword,
-				LogStoreMaxCount: newSetts.DbMaxLogStoreCount,
-				LogStoreDays:     newSetts.DbStoreDays,
+		case <-cl.SettsChan:
+			// cl.oracleLogCntrl.SettingsChan <- OracleLoggerSettings{
+			// 	Hostname:         newSetts.DbHostname,
+			// 	Port:             newSetts.DbPort,
+			// 	ServiceName:      newSetts.DbServiceName,
+			// 	UserName:         newSetts.DbUser,
+			// 	Password:         newSetts.DbPassword,
+			// 	LogStoreMaxCount: newSetts.DbMaxLogStoreCount,
+			// 	LogStoreDays:     newSetts.DbStoreDays,
+			// }
+
+			cl.redisLogCntrl.SettsChan <- RedisLoggerSettings{
+				Hostname: "192.168.1.24",
+				Port:     6380,
+				DbId:     0,
+				UserName: "",
+				Password: "",
+
+				StreamMaxCount:   100000000,
+				SendIntervalMSec: 50,
+				MaxSendCount:     50,
 			}
 
-		case oraLoggerState := <-cl.oracleLogCntrl.StateChan:
-			chief_state.SetLoggerState(oraLoggerState)
+			// case oraLoggerState := <-cl.oracleLogCntrl.StateChan:
+			// 	chief_state.SetLoggerState(oraLoggerState)
 		}
 	}
 }
@@ -71,7 +85,8 @@ func (cl *ChiefLogger) processNewLogMsg(severity string, format string, a ...int
 	}
 	fmtpLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
 
-	cl.oracleLogCntrl.MessChan <- fmtpLogMsg
+	//cl.oracleLogCntrl.MessChan <- fmtpLogMsg
+	cl.redisLogCntrl.LogMsgChan <- fmtpLogMsg
 }
 
 // Printf реализация интерфейса logger
@@ -119,5 +134,5 @@ func (cl *ChiefLogger) SetMinSeverity(sev logger.Severity) {
 }
 
 func (cl *ChiefLogger) SetWriteStatesToDb(writeState bool) {
-	cl.oracleLogCntrl.SetWriteStatesToDb(writeState)
+	//cl.oracleLogCntrl.SetWriteStatesToDb(writeState)
 }
