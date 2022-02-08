@@ -10,7 +10,7 @@ import (
 	"fdps/fmtp/chief/chief_state"
 	pb "fdps/fmtp/chief/proto/fmtp"
 	chief_cfg "fdps/fmtp/chief_configurator"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fdps/go_utils/logger"
 
 	"google.golang.org/grpc"
@@ -120,7 +120,7 @@ func (c *OldiGrpcController) Work() {
 		case msgFromFdps := <-c.fmtpServer.FromFdpsChan:
 			c.FromFdpsChan <- msgFromFdps
 
-			logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
+			logger.PrintfInfo("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityInfo, chief_settings.OLDIProvider,
 				fmt.Sprintf("Получено сообщение от плановой подсистемы: %s", msgFromFdps.PbMsg.Txt)))
 		}
 	}

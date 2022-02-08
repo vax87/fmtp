@@ -13,7 +13,6 @@ type ConfiguratorUrls struct {
 	HeartbeatURL    *url.URL `json:"-"`
 	SettingsURLStr  string   `json:"SettingsUrl"` // url, на который отправляется запрос настроек
 	SettingsURL     *url.URL `json:"-"`
-	WriteStateToDb  bool     `json:"WriteStateToDb"` // запись состояния каналов в БД
 }
 
 var confFilePath = utils.AppPath() + "/config/config_urls.json"

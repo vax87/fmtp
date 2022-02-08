@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 )
 
 // клиентское TCP подключение
@@ -26,9 +26,9 @@ type TcpTransportClient struct {
 	tcpClient      net.Conn      // клиентское подключение по TCPv4
 	cancelWorkChan chan struct{} // канал для сигнала прекращения отправки, чтения данных
 
-	logMessageChan chan fmtp_logger.LogMessage // канал для передачи сообщний для журнала
-	connStateChan  chan bool                   // канал для передачи успешности подключения по TCP
-	reconnectChan  chan struct{}               // канал для сообщения TCP клиенту о необходимости подключитья к серверу
+	logMessageChan chan fmtp_log.LogMessage // канал для передачи сообщний для журнала
+	connStateChan  chan bool                // канал для передачи успешности подключения по TCP
+	reconnectChan  chan struct{}            // канал для сообщения TCP клиенту о необходимости подключитья к серверу
 
 	lastConnectError   error // последняя возникшая ошибка при установке соединения (чтоб не отправлять в лог одно и то же)
 	lastKeepaliveError error // последняя возникшая ошибка при установке keepalive (чтоб не отправлять в лог одно и то же)
@@ -43,7 +43,7 @@ func NewFmtpTcpClient() *TcpTransportClient {
 		toSendDataChan:     make(chan DataAndEvent, 1024),
 		eventAfterSendChan: make(chan fmtp.FmtpEvent),
 		cancelWorkChan:     make(chan struct{}),
-		logMessageChan:     make(chan fmtp_logger.LogMessage, 10),
+		logMessageChan:     make(chan fmtp_log.LogMessage, 10),
 		connStateChan:      make(chan bool),
 		reconnectChan:      make(chan struct{}),
 		errorChan:          make(chan error),
@@ -68,7 +68,7 @@ func (ftc *TcpTransportClient) EventChan() chan fmtp.FmtpEvent {
 	return ftc.eventAfterSendChan
 }
 
-func (ftc *TcpTransportClient) LogChan() chan fmtp_logger.LogMessage {
+func (ftc *TcpTransportClient) LogChan() chan fmtp_log.LogMessage {
 	return ftc.logMessageChan
 }
 
@@ -105,19 +105,19 @@ func (ftc *TcpTransportClient) startClient() {
 	if ftc.tcpClient, err = net.Dial("tcp", ftc.curSett.ServerAddr+":"+strconv.Itoa(ftc.curSett.ServerPort)); err != nil {
 		if err.Error() != ftc.lastConnectError.Error() {
 			ftc.lastConnectError = err
-			ftc.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+			ftc.logMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 				fmt.Sprintf("При установке TCP соединения возникла ошибка. Ошибка:<%s>", err.Error()))
 		}
 		ftc.connStateChan <- false
 		return
 	}
-	ftc.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityDebug, "Установлено TCP соединение FMTP канала.")
+	ftc.logMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityDebug, "Установлено TCP соединение FMTP канала.")
 	ftc.connStateChan <- true
 
 	if err = ftc.tcpClient.(*net.TCPConn).SetKeepAlive(false); err != nil {
 		if err.Error() != ftc.lastKeepaliveError.Error() {
 			ftc.lastKeepaliveError = err
-			ftc.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+			ftc.logMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 				fmt.Sprintf("При установке флага keep_alive TCP соединения возникла ошибка. Ошибка:<%s>", err.Error()))
 		}
 		ftc.connStateChan <- false
@@ -137,10 +137,10 @@ func (ftc *TcpTransportClient) stopClient() {
 	ftc.connStateChan <- false
 
 	if err := ftc.tcpClient.Close(); err != nil {
-		ftc.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+		ftc.logMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 			fmt.Sprintf("Ошибка при закрытии TCP соединение FMTP канала. Ошибка: <%s>.", err.Error()))
 	} else {
-		ftc.logMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError, "Закрыто TCP соединение FMTP канала.")
+		ftc.logMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError, "Закрыто TCP соединение FMTP канала.")
 	}
 }
 
@@ -156,7 +156,7 @@ func (ftc *TcpTransportClient) receiveLoop() {
 			buffer := make([]byte, 1024)
 			if readBytes, err := ftc.tcpClient.Read(buffer); err != nil {
 				if err != io.EOF {
-					ftc.logMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
+					ftc.logMessageChan <- fmtp_log.LogChannelSTDT(fmtp_log.SeverityError, fmtp_log.NoneFmtpType, fmtp_log.DirectionIncoming,
 						fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: <%s>.", err.Error()))
 				}
 				ftc.errorChan <- err
@@ -180,7 +180,7 @@ func (ftc *TcpTransportClient) sendLoop() {
 		// получены данные для отправки
 		case curData := <-ftc.toSendDataChan:
 			if _, err := ftc.tcpClient.Write(curData.DataToSend); err != nil {
-				ftc.logMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
+				ftc.logMessageChan <- fmtp_log.LogChannelSTDT(fmtp_log.SeverityError, fmtp_log.NoneFmtpType, fmtp_log.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: <%s>.", err.Error()))
 				ftc.errorChan <- err
 				return

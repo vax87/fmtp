@@ -10,7 +10,7 @@ import (
 	"fdps/fmtp/chief/chief_settings"
 	pb "fdps/fmtp/chief/proto/fmtp"
 	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fdps/go_utils/logger"
 
 	"google.golang.org/grpc/codes"
@@ -111,7 +111,7 @@ func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 	for idx, val := range s.msgToFdps {
 		if val.Rrtime.AsTime().Add(msgValidDur).Before(time.Now().UTC()) {
 			maxIdx = idx
-			logger.PrintfWarn("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityWarning, chief_settings.OLDIProvider,
+			logger.PrintfWarn("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityWarning, chief_settings.OLDIProvider,
 				fmt.Sprintf("Сообщение удалено из очереди на отправку провайдеру по истечении 30 сек.: %s", val.Txt)))
 		} else {
 			// раз попался первый с валидным временем, последующие новее

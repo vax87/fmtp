@@ -4,7 +4,7 @@ import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 )
 
 // коды завершения приложения канала
@@ -91,11 +91,11 @@ func CreateChannelHeartbeatMsg(state channel_state.ChannelState) ChannelHeartbea
 // канал -> контроллер (chief)
 type ChannelLogMsg struct {
 	HeaderMsg
-	fmtp_logger.LogMessage // сообщение для канала
+	fmtp_log.LogMessage // сообщение для канала
 }
 
 // CreateChannelLogMsg сформировать сообщение для журнала
-func CreateChannelLogMsg(log fmtp_logger.LogMessage) ChannelLogMsg {
+func CreateChannelLogMsg(log fmtp_log.LogMessage) ChannelLogMsg {
 	return ChannelLogMsg{HeaderMsg: HeaderMsg{Header: ChannelLogHeader}, LogMessage: log}
 }
 

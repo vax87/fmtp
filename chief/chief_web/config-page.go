@@ -13,8 +13,7 @@ type ConfigPage struct {
 	editTempl *template.Template
 	Title     string
 
-	UrlConfig      configurator_urls.ConfiguratorUrls
-	WriteStateToDb bool
+	UrlConfig configurator_urls.ConfiguratorUrls
 }
 
 func (cp *ConfigPage) initialize(title string) {
@@ -50,12 +49,6 @@ var ConfigTemplate = `
 		</tr>
 		
 		<tr>
-		<tr>
-			<td colspan="2"></td>
-		</tr>
-		<td>
-			<input type="checkbox" name="WriteStateToDb" value="check" {{if .WriteStateToDb}} checked {{end}} />Сохранять состояние каналов в БД:<Br>
-		</td>
 	</tr>
 	{{end}}	
 	<tr> 

@@ -47,13 +47,9 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 				ChPort:     chief_configurator.ChiefCfg.ChannelsPort,
 			}
 
-			//oldiTcpCntrl.SettsChan <- chief_configurator.ChiefCfg.ProviderSettings(chief_settings.OLDIProvider)
 			oldiGrpcCntrl.SettsChangedChan <- struct{}{}
 
-			chief_logger.ChiefLog.SettsChan <- chief_configurator.ChiefCfg.LoggerSetts
-
-		case saveStates := <-chiefConfClient.SaveStatesToDbChan:
-			chief_logger.ChiefLog.SetWriteStatesToDb(saveStates)
+			chief_logger.ChiefLog.SettsChangedChan <- struct{}{}
 
 		// получены данные от провайдера OLDI
 		case fdpsData := <-oldiGrpcCntrl.FromFdpsChan:

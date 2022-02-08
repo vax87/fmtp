@@ -37,8 +37,6 @@ type ChiefConfiguratorClient struct {
 	configUrls           configurator_urls.ConfiguratorUrls
 	ChiefSettChangedChan chan struct{}
 
-	SaveStatesToDbChan chan bool
-
 	postResultChan chan httpResult
 
 	readLocalSettingsTimer *time.Timer
@@ -53,7 +51,6 @@ type ChiefConfiguratorClient struct {
 func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
 		ChiefSettChangedChan:   make(chan struct{}, 1),
-		SaveStatesToDbChan:     make(chan bool, 1),
 		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
 		withDocker:             workWithDocker,
@@ -147,7 +144,6 @@ func (cc *ChiefConfiguratorClient) Work() {
 		// получены настроки URL из web
 		case cc.configUrls = <-chief_web.UrlConfigChan:
 			cc.configUrls.SaveToFile()
-			cc.SaveStatesToDbChan <- cc.configUrls.WriteStateToDb
 		}
 	}
 }
@@ -156,7 +152,6 @@ func (cc *ChiefConfiguratorClient) Work() {
 func (cc *ChiefConfiguratorClient) Start() {
 	cc.configUrls.ReadFromFile()
 	chief_web.SetUrlConfig(cc.configUrls)
-	cc.SaveStatesToDbChan <- cc.configUrls.WriteStateToDb
 
 	cc.initBeforeGetSettings()
 	logger.PrintfDebug("Собственные IP адреса: %v", utils.GetLocalIpv4List())
@@ -271,7 +266,6 @@ func (cc *ChiefConfiguratorClient) sendSettings() {
 			ChiefCfg.ProvidersSetts[ind].LocalPort = ChiefCfg.OldiProviderPort
 		}
 	}
-	//cc.ProviderSettsChan <- ChiefCfg.ProvidersSetts
 	cc.ChiefSettChangedChan <- struct{}{}
 
 	chief_state.CommonChiefState.CntrlID = ChiefCfg.CntrlID

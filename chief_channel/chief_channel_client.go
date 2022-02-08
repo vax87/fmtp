@@ -3,7 +3,7 @@ package chief_channel
 import (
 	"encoding/json"
 	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 
 	"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
@@ -21,7 +21,7 @@ type ClientSettings struct {
 
 // Client клиент взаимодействия контроллера и канала
 type Client struct {
-	LogChan chan fmtp_logger.LogMessage // канал для передачи сообщний для журнала
+	LogChan chan fmtp_log.LogMessage // канал для передачи сообщний для журнала
 
 	ReceiveChan chan []byte // канал для приема данных от контроллера каналов
 	SendChan    chan []byte // канал для отправки данных контроллеру каналов
@@ -37,7 +37,7 @@ type Client struct {
 // NewChiefChannelClient конструктор
 func NewChiefChannelClient(done chan struct{}) *Client {
 	return &Client{
-		LogChan:     make(chan fmtp_logger.LogMessage, 100),
+		LogChan:     make(chan fmtp_log.LogMessage, 100),
 		ReceiveChan: make(chan []byte, 1024),
 		SendChan:    make(chan []byte, 1024),
 		SettChan:    make(chan ClientSettings),
@@ -79,11 +79,11 @@ func (c *Client) Work() {
 				c.disconnTime = time.Time{}
 
 				if !c.sendSettingsRequest {
-					c.LogChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityDebug,
+					c.LogChan <- fmtp_log.LogChannelST(fmtp_log.SeverityDebug,
 						fmt.Sprintf("Запущен FMTP канал id = %d.", c.setts.ChannelID))
 
 					if dataToSend, err := json.Marshal(CreateSettingsRequestMsg(c.setts.ChannelID)); err == nil {
-						c.LogChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityDebug,
+						c.LogChan <- fmtp_log.LogChannelST(fmtp_log.SeverityDebug,
 							fmt.Sprintf("Запрос настроек от FMTP канала id = %d.", c.setts.ChannelID))
 
 						c.SendChan <- dataToSend
@@ -107,13 +107,13 @@ func (c *Client) Work() {
 				}
 			}
 
-			c.LogChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityDebug,
+			c.LogChan <- fmtp_log.LogChannelST(fmtp_log.SeverityDebug,
 				fmt.Sprintf("Изменено состояние подключения FMTP канала в контроллеру. Id канала = %d. Состояние: %s", c.setts.ChannelID, connStateStr))
 
 		// ошибка WS
 		case wsErr := <-c.ws.ErrorChan:
 
-			c.LogChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+			c.LogChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 				fmt.Sprintf("Ошибка сетевого взаимодействия FMTP канала и контроллера. Ошибка: %s.", wsErr.Error()))
 
 		}

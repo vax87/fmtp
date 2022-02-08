@@ -11,7 +11,7 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/channel/fmtp_states"
 	"fdps/fmtp/chief_channel"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 
 	"fdps/go_utils/logger"
 )
@@ -37,7 +37,7 @@ var channelSetts channel_settings.ChannelSettings
 // создание сообщения журнала для отправки контроллеру
 func createLogMessage(severity string, text string) {
 
-	curLog := fmtp_logger.LogChannelST(severity, text)
+	curLog := fmtp_log.LogChannelST(severity, text)
 	completeLogMessage(&curLog)
 
 	if dataToSend, err := json.Marshal(chief_channel.CreateChannelLogMsg(curLog)); err == nil {
@@ -46,20 +46,20 @@ func createLogMessage(severity string, text string) {
 }
 
 // дополнение сообщения журнала сведениями о канала Id, RemoteAtc, LocalAtc, DataType
-func completeLogMessage(logMsg *fmtp_logger.LogMessage) {
+func completeLogMessage(logMsg *fmtp_log.LogMessage) {
 	logMsg.ChannelId = channelSetts.Id
 	logMsg.ChannelLocName = channelSetts.LocalATC
 	logMsg.ChannelRemName = channelSetts.RemoteATC
 	logMsg.DataType = channelSetts.DataType
 
 	switch logMsg.Severity {
-	case fmtp_logger.SeverityDebug:
+	case fmtp_log.SeverityDebug:
 		logger.PrintfDebug("FMTP FORMAT %v", *logMsg)
-	case fmtp_logger.SeverityInfo:
+	case fmtp_log.SeverityInfo:
 		logger.PrintfInfo("FMTP FORMAT %v", *logMsg)
-	case fmtp_logger.SeverityWarning:
+	case fmtp_log.SeverityWarning:
 		logger.PrintfWarn("FMTP FORMAT %v", *logMsg)
-	case fmtp_logger.SeverityError:
+	case fmtp_log.SeverityError:
 		logger.PrintfErr("FMTP FORMAT %v", *logMsg)
 	default:
 		logger.PrintfDebug("FMTP FORMAT %v", *logMsg)
@@ -114,7 +114,7 @@ func mainReturnWithCode() int {
 	logger.AppendLogger(logger.WebLogger)
 
 	// свой формат вывода логов на web страницу
-	fmtp_logger.SetUserLogFormatForWeb()
+	fmtp_log.SetUserLogFormatForWeb()
 
 	go chiefClient.Work()
 	chiefClient.SettChan <- chief_channel.ClientSettings{ChiefAddress: "127.0.0.1", ChiefPort: chiefPort, ChannelID: channelSetts.Id}
@@ -129,11 +129,11 @@ func mainReturnWithCode() int {
 				if headerMsg.Header == chief_channel.AnswerSettingsHeader {
 					if err := json.Unmarshal(curData, &channelSetts); err == nil {
 						if checkErr := channelSetts.CheckSettings(); checkErr != nil {
-							createLogMessage(fmtp_logger.SeverityError,
+							createLogMessage(fmtp_log.SeverityError,
 								fmt.Sprintf("Получены некорректные настройки. Настройки: <%s>. Ошибка: <%s>", channelSetts.ToLogMessage(), checkErr.Error()))
 
 						} else {
-							createLogMessage(fmtp_logger.SeverityDebug,
+							createLogMessage(fmtp_log.SeverityDebug,
 								fmt.Sprintf("Получены настройки. Настройки: <%s>", channelSetts.ToLogMessage()))
 
 							go fmtpStateCntrl.Work(channelSetts)
@@ -154,7 +154,7 @@ func mainReturnWithCode() int {
 							logger.SetVersion(channelSetts.Version)
 						}
 					} else {
-						createLogMessage(fmtp_logger.SeverityError,
+						createLogMessage(fmtp_log.SeverityError,
 							fmt.Sprintf("Получено сообщение неизвестного формата. Сообщение: <%s>. Ошибка: <%s>.", string(curData), err.Error()))
 					}
 				} else if headerMsg.Header == chief_channel.FdpsMessageHeader {
@@ -163,13 +163,13 @@ func mainReturnWithCode() int {
 					if err := json.Unmarshal(curData, &curDataMsg); err == nil {
 						fmtpStateCntrl.FmtpDataSendChan <- curDataMsg.FmtpMessage
 					} else {
-						createLogMessage(fmtp_logger.SeverityError,
+						createLogMessage(fmtp_log.SeverityError,
 							fmt.Sprintf("От контроллера получено сообщение неизвестного формата. Сообщение: <%s>. Ошибка: <%s>.",
 								string(curData), err.Error()))
 					}
 				}
 			} else {
-				createLogMessage(fmtp_logger.SeverityError,
+				createLogMessage(fmtp_log.SeverityError,
 					fmt.Sprintf("От контроллера получено сообщение неизвестного формата. Сообщение: <%s>. Ошибка: <%s>.",
 						string(curData), err.Error()))
 				continue

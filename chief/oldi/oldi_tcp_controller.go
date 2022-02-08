@@ -11,7 +11,7 @@ import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fdps/go_utils/logger"
 	"fdps/utils"
 )
@@ -136,7 +136,7 @@ func (c *OldiTcpController) receiveLoop(clntConn net.Conn, clnt oldiClnt) {
 		default:
 			buffer := make([]byte, 8192)
 			if readBytes, err := clntConn.Read(buffer); err != nil {
-				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", fmtp_log.LogChannelSTDT(fmtp_log.SeverityError, fmtp_log.NoneFmtpType, fmtp_log.DirectionIncoming,
 					fmt.Sprintf("Ошибка чтения данных из FMTP канала. Ошибка: %v.", err)))
 
 				c.closeClient(clntConn)
@@ -169,7 +169,7 @@ func (c *OldiTcpController) sendLoop(clntConn net.Conn, clnt oldiClnt) {
 			}
 
 			if _, err := clntConn.Write(dataToSend); err != nil {
-				logger.PrintfErr("FMTP FORMAT %#v", fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityError, fmtp_logger.NoneFmtpType, fmtp_logger.DirectionIncoming,
+				logger.PrintfErr("FMTP FORMAT %#v", fmtp_log.LogChannelSTDT(fmtp_log.SeverityError, fmtp_log.NoneFmtpType, fmtp_log.DirectionIncoming,
 					fmt.Sprintf("Ошибка отправки данных в FMTP канала. Ошибка: %v.", err)))
 				c.closeClient(clntConn)
 			} else {

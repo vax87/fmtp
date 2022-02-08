@@ -2,7 +2,7 @@ package chief_logger
 
 import (
 	"context"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fmt"
 	"sync"
 	"time"
@@ -11,9 +11,9 @@ import (
 )
 
 type RedisLogController struct {
-	LogMsgChan         chan fmtp_logger.LogMessage
+	LogMsgChan         chan fmtp_log.LogMessage
 	SettsChan          chan RedisLoggerSettings
-	msgToSend          []fmtp_logger.LogMessage
+	msgToSend          []fmtp_log.LogMessage
 	redisClnt          *redis.Client
 	sendToStreamTicker *time.Ticker
 	setts              RedisLoggerSettings
@@ -23,9 +23,9 @@ type RedisLogController struct {
 
 func NewRedisController() *RedisLogController {
 	return &RedisLogController{
-		LogMsgChan:         make(chan fmtp_logger.LogMessage, 1024),
+		LogMsgChan:         make(chan fmtp_log.LogMessage, 1024),
 		SettsChan:          make(chan RedisLoggerSettings, 10),
-		msgToSend:          make([]fmtp_logger.LogMessage, 0),
+		msgToSend:          make([]fmtp_log.LogMessage, 0),
 		sendToStreamTicker: time.NewTicker(time.Second),
 		successConnect:     false,
 	}
@@ -56,13 +56,13 @@ func (rc *RedisLogController) Run() {
 			countMsg := len(rc.msgToSend)
 			if rc.successConnect && len(rc.msgToSend) > 0 {
 				rc.msgMutex.Lock()
-				toSend := make([]fmtp_logger.LogMessage, 0)
+				toSend := make([]fmtp_log.LogMessage, 0)
 
 				if countMsg > rc.setts.MaxSendCount {
 					toSend = append(toSend, rc.msgToSend[:rc.setts.MaxSendCount]...)
 					rc.msgToSend = rc.msgToSend[rc.setts.MaxSendCount:]
 				} else {
-					toSend = make([]fmtp_logger.LogMessage, len(rc.msgToSend))
+					toSend = make([]fmtp_log.LogMessage, len(rc.msgToSend))
 					copy(toSend, rc.msgToSend)
 					rc.msgToSend = rc.msgToSend[:0]
 				}
@@ -89,8 +89,8 @@ func (rc *RedisLogController) connectToServer() {
 	}
 }
 
-func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_logger.LogMessage) error {
-	fmt.Printf("\t\tBEGIN pushLogsToStream  %d %s\n", len(msgs), time.Now().Format("2006-01-02 15:04:05.000"))
+func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error {
+	//fmt.Printf("\t\tBEGIN pushLogsToStream  %d %s\n", len(msgs), time.Now().Format("2006-01-02 15:04:05.000"))
 
 	var values []interface{}
 	values = append(values, "count")
@@ -109,6 +109,6 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_logger.LogMessage) er
 			Values: values,
 		}).Err()
 
-	fmt.Printf("\t\tEND pushLogsToStream %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
+	//fmt.Printf("\t\tEND pushLogsToStream %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 	return err
 }

@@ -10,7 +10,7 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/channel/tcp_transport"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fdps/go_utils/logger"
 
 	"fdps/utils"
@@ -38,9 +38,9 @@ type StateController struct {
 	ownIdentificationMsg    fmtp.FmtpMessage // собственное идентификационное сообщение
 	remoteIdentificationMsg fmtp.FmtpMessage // ожидаемое идентификационное сообщение
 
-	LogMessageChan      chan fmtp_logger.LogMessage // канал для передачи сообщений для журнала
-	FmtpDataReceiveChan chan fmtp.FmtpMessage       // канал для отправки данных полученных поверх FMTP
-	FmtpDataSendChan    chan fmtp.FmtpMessage       // канал для приема данных полученных поверх FMTP
+	LogMessageChan      chan fmtp_log.LogMessage // канал для передачи сообщений для журнала
+	FmtpDataReceiveChan chan fmtp.FmtpMessage    // канал для отправки данных полученных поверх FMTP
+	FmtpDataSendChan    chan fmtp.FmtpMessage    // канал для приема данных полученных поверх FMTP
 
 	receivedBuffer bytes.Buffer // буфер полученных из TCP транспорта данных
 }
@@ -51,7 +51,7 @@ func NewStateController() *StateController {
 		currentState:        fmtp.Idle,
 		FmtpStateChan:       make(chan channel_state.ChannelState),
 		stateTick:           time.NewTicker(channel_state.StateSendInterval),
-		LogMessageChan:      make(chan fmtp_logger.LogMessage, 100),
+		LogMessageChan:      make(chan fmtp_log.LogMessage, 100),
 		FmtpDataReceiveChan: make(chan fmtp.FmtpMessage, 1024),
 		FmtpDataSendChan:    make(chan fmtp.FmtpMessage, 1024),
 	}
@@ -108,7 +108,7 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 
 		// получены данные от контроллера (chief) поверх FMTP
 		case fmtpMsgFromChief := <-fsc.FmtpDataSendChan:
-			fsc.sendPacket(fmtpMsgFromChief, fmtp.LData, fmtp_logger.SeverityInfo)
+			fsc.sendPacket(fmtpMsgFromChief, fmtp.LData, fmtp_log.SeverityInfo)
 
 		// полученные по TCP данные
 		case receivedData := <-fsc.tcpTransport.ReceivedChan():
@@ -125,7 +125,7 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 
 							} else {
 								if err != io.EOF {
-									fsc.LogMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+									fsc.LogMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 										fmt.Sprintf("Ошибка чтения из буфера полученных данных данных. Ошибка: <%s>", err.Error()))
 								}
 								break
@@ -133,7 +133,7 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 						}
 					} else {
 						if err != io.EOF {
-							fsc.LogMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+							fsc.LogMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 								fmt.Sprintf("Ошибка чтения из буфера полученных данных данных. Ошибка: <%s>", err.Error()))
 						}
 						break
@@ -141,7 +141,7 @@ func (fsc *StateController) Work(settings channel_settings.ChannelSettings) {
 				}
 			} else {
 				fmt.Println("Buffer error ", err.Error())
-				fsc.LogMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityError,
+				fsc.LogMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityError,
 					fmt.Sprintf("Ошибка записи в буфер полученных данных данных. Ошибка: <%s>", err.Error()))
 			}
 
@@ -192,37 +192,37 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 	case fmtp.Identification:
 		switch string(fmtpMsg.Text) {
 		case string(fmtp.RejectMessage.Text):
-			fsc.processEventMessage(fmtp.RReject, fmtpMsg, fmtp_logger.SeverityInfo)
+			fsc.processEventMessage(fmtp.RReject, fmtpMsg, fmtp_log.SeverityInfo)
 		case string(fmtp.AcceptMessage.Text):
-			fsc.processEventMessage(fmtp.RAccept, fmtpMsg, fmtp_logger.SeverityInfo)
+			fsc.processEventMessage(fmtp.RAccept, fmtpMsg, fmtp_log.SeverityInfo)
 		default:
 			if string(fmtpMsg.Text) == string(fsc.remoteIdentificationMsg.Text) {
 
-				fsc.processEventMessage(fmtp.RIdValid, fmtpMsg, fmtp_logger.SeverityInfo)
+				fsc.processEventMessage(fmtp.RIdValid, fmtpMsg, fmtp_log.SeverityInfo)
 			} else {
-				fsc.LogMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityWarning, fmtpMsg.Type.ToString(), fmtp_logger.DirectionIncoming,
+				fsc.LogMessageChan <- fmtp_log.LogChannelSTDT(fmtp_log.SeverityWarning, fmtpMsg.Type.ToString(), fmtp_log.DirectionIncoming,
 					fmt.Sprintf("Несовпадение идентификационных сообщений. Ожидаемый идентификатор - <%s>, полученный - <%s>.",
 						string(fsc.remoteIdentificationMsg.Text), string(fmtpMsg.Text)))
 
-				fsc.processEventMessage(fmtp.RIdInvalid, fmtpMsg, fmtp_logger.SeverityInfo)
+				fsc.processEventMessage(fmtp.RIdInvalid, fmtpMsg, fmtp_log.SeverityInfo)
 			}
 		}
 
 	case fmtp.System:
 		switch string(fmtpMsg.Text) {
 		case string(fmtp.StartupMessage.Text):
-			fsc.processEventMessage(fmtp.RStartup, fmtpMsg, fmtp_logger.SeverityInfo)
+			fsc.processEventMessage(fmtp.RStartup, fmtpMsg, fmtp_log.SeverityInfo)
 		case string(fmtp.ShutdownMessage.Text):
-			fsc.processEventMessage(fmtp.RShutdown, fmtpMsg, fmtp_logger.SeverityInfo)
+			fsc.processEventMessage(fmtp.RShutdown, fmtpMsg, fmtp_log.SeverityInfo)
 		case string(fmtp.HeartbeatMessage.Text):
 			if fsc.curSet.LogDebug {
-				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, fmtp_logger.SeverityInfo)
+				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, fmtp_log.SeverityInfo)
 			} else {
-				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, fmtp_logger.SeverityDebug)
+				fsc.processEventMessage(fmtp.RHeartbeat, fmtpMsg, fmtp_log.SeverityDebug)
 			}
 		}
 	case fmtp.Operational:
-		fsc.processEventMessage(fmtp.RData, fmtpMsg, fmtp_logger.SeverityDebug)
+		fsc.processEventMessage(fmtp.RData, fmtpMsg, fmtp_log.SeverityDebug)
 		fsc.processDataMessage(fmtpMsg)
 
 	default:
@@ -234,7 +234,7 @@ func (fsc *StateController) processFmtpMessage(fmtpMsg fmtp.FmtpMessage) {
 func (fsc *StateController) forceNewEvent(curEvent fmtp.FmtpEvent) {
 	if nextState := fsc.stateMachine.GetNextState(fsc.currentState, curEvent); nextState != fmtp.Empt {
 		if fsc.currentState != nextState {
-			fsc.LogMessageChan <- fmtp_logger.LogChannelST(fmtp_logger.SeverityInfo,
+			fsc.LogMessageChan <- fmtp_log.LogChannelST(fmtp_log.SeverityInfo,
 				fmt.Sprintf("Смена FMTP состояния: <%s> -> <%s> по событию <%s>.",
 					fsc.currentState.ToString(), nextState.ToString(), curEvent.ToString()))
 		}
@@ -260,20 +260,20 @@ func (fsc *StateController) sendPacket(messageToSend fmtp.FmtpMessage, fmtpEvent
 
 	fsc.tcpTransport.SendChan() <- tcp_transport.DataAndEvent{DataToSend: fmtp.MakeFmtpPacket(messageToSend), EventAfterSend: fmtpEvent}
 
-	if (logSeverity == fmtp_logger.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != fmtp_logger.SeverityDebug {
-		fsc.LogMessageChan <- fmtp_logger.LogChannelSTDT(logSeverity, messageToSend.Type.ToString(), fmtp_logger.DirectionOutcoming,
+	if (logSeverity == fmtp_log.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != fmtp_log.SeverityDebug {
+		fsc.LogMessageChan <- fmtp_log.LogChannelSTDT(logSeverity, messageToSend.Type.ToString(), fmtp_log.DirectionOutcoming,
 			fmt.Sprintf("Содержание: <%s>.", utfTextToLog))
 	}
 }
 
 func (fsc *StateController) processEventMessage(curEvent fmtp.FmtpEvent, fmtpMsg fmtp.FmtpMessage, logSeverity string) {
-	if (logSeverity == fmtp_logger.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != fmtp_logger.SeverityDebug {
+	if (logSeverity == fmtp_log.SeverityDebug && fsc.curSet.LogDebug) || logSeverity != fmtp_log.SeverityDebug {
 
 		if fsc.curSet.DataEncoding == channel_settings.Encode1251 && curEvent == fmtp.RData {
 			fmtpMsg.Text = string(utils.Win1251toUtf8([]byte(fmtpMsg.Text)))
 		}
 
-		fsc.LogMessageChan <- fmtp_logger.LogChannelSTDT(logSeverity, fmtpMsg.Type.ToString(), fmtp_logger.DirectionIncoming,
+		fsc.LogMessageChan <- fmtp_log.LogChannelSTDT(logSeverity, fmtpMsg.Type.ToString(), fmtp_log.DirectionIncoming,
 			fmt.Sprintf("Содержание: <%s>. Указание обработать событие <%s>",
 				fmtpMsg.Text, curEvent.ToString()))
 	}
@@ -285,7 +285,7 @@ func (fsc *StateController) processDataMessage(fmtpMsg fmtp.FmtpMessage) {
 		fmtpMsg.Text = string(utils.Win1251toUtf8([]byte(fmtpMsg.Text)))
 	}
 
-	fsc.LogMessageChan <- fmtp_logger.LogChannelSTDT(fmtp_logger.SeverityInfo, fmtpMsg.Type.ToString(), fmtp_logger.DirectionIncoming,
+	fsc.LogMessageChan <- fmtp_log.LogChannelSTDT(fmtp_log.SeverityInfo, fmtpMsg.Type.ToString(), fmtp_log.DirectionIncoming,
 		fmt.Sprintf("Содержание: <%s>.",
 			fmtpMsg.Text))
 

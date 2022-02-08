@@ -23,7 +23,7 @@ import (
 	pb "fdps/fmtp/chief/proto/fmtp"
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_logger"
+	"fdps/fmtp/fmtp_log"
 	"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
 	"fdps/utils"
@@ -237,13 +237,13 @@ func (cc *ChiefChannelServer) Work() {
 					var curLogMsg ChannelLogMsg
 					if err := json.Unmarshal(curWsPkg.Data, &curLogMsg); err == nil {
 						switch curLogMsg.LogMessage.Severity {
-						case fmtp_logger.SeverityDebug:
+						case fmtp_log.SeverityDebug:
 							logger.PrintfDebug("FMTP FORMAT %#v", curLogMsg.LogMessage)
-						case fmtp_logger.SeverityInfo:
+						case fmtp_log.SeverityInfo:
 							logger.PrintfInfo("FMTP FORMAT %#v", curLogMsg.LogMessage)
-						case fmtp_logger.SeverityWarning:
+						case fmtp_log.SeverityWarning:
 							logger.PrintfWarn("FMTP FORMAT %#v", curLogMsg.LogMessage)
-						case fmtp_logger.SeverityError:
+						case fmtp_log.SeverityError:
 							logger.PrintfErr("FMTP FORMAT %#v", curLogMsg.LogMessage)
 						}
 					}
@@ -273,7 +273,7 @@ func (cc *ChiefChannelServer) Work() {
 							if cc.oldiIdent > 1000 {
 								cc.oldiIdent = 1
 							}
-							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_logger.LogCntrlSDT(fmtp_logger.SeverityInfo, chief_settings.OLDIProvider,
+							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityInfo, chief_settings.OLDIProvider,
 								fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
 							cc.ToFdpsPacketChan <- &oldiPkg
 						}
