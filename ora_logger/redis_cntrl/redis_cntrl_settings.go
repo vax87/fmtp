@@ -1,7 +1,7 @@
 package redis_cntrl
 
-// RedisLoggerSettings - настройки контроллера отправки логов в БД Redis
-type RedisLoggerSettings struct {
+// RedisCntrlSettings - настройки контроллера отправки логов в БД Redis
+type RedisCntrlSettings struct {
 	Hostname string `json:"DbHostname"` // адрес/название хоста
 	Port     int    `json:"DbPort"`     // порт подключения к БД
 	DbId     int    `json:"DbId"`       // идентификатор БД
@@ -14,7 +14,7 @@ type RedisLoggerSettings struct {
 }
 
 // сравнение настроек в части настроек БД
-func (s *RedisLoggerSettings) equalDb(otherRls RedisLoggerSettings) bool {
+func (s *RedisCntrlSettings) equalDb(otherRls RedisCntrlSettings) bool {
 	return s.Hostname == otherRls.Hostname &&
 		s.Port == otherRls.Port &&
 		s.UserName == otherRls.UserName &&

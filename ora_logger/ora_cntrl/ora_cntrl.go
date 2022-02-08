@@ -207,15 +207,15 @@ func (rlc *OraLoggerController) Run() {
 			rlc.checkLogLivetime()
 
 		case <-metricTimer.C:
-			diffCountRecvPerSecond := rlc.countRecvMsg - rlc.countRecvMsgPrevSecond
+			//diffCountRecvPerSecond := rlc.countRecvMsg - rlc.countRecvMsgPrevSecond
 			rlc.countRecvMsgPrevSecond = rlc.countRecvMsg
-			logger.SetDebugParam("Recv за секунду", strconv.FormatInt(diffCountRecvPerSecond, 10), logger.DebugColor)
-			logger.SetDebugParam("Recv всего ", strconv.FormatInt(rlc.countRecvMsg, 10), logger.DebugColor)
+			//logger.SetDebugParam("Recv за секунду", strconv.FormatInt(diffCountRecvPerSecond, 10), logger.DebugColor)
+			//logger.SetDebugParam("Recv всего ", strconv.FormatInt(rlc.countRecvMsg, 10), logger.DebugColor)
 
-			diffCountQueryPerSecond := rlc.countQueryExec - rlc.countQueryExecPrevSecond
+			//diffCountQueryPerSecond := rlc.countQueryExec - rlc.countQueryExecPrevSecond
 			rlc.countQueryExecPrevSecond = rlc.countQueryExec
-			logger.SetDebugParam("Exec за секунду", strconv.Itoa(diffCountQueryPerSecond), logger.DebugColor)
-			logger.SetDebugParam("Exec всего ", strconv.Itoa(rlc.countQueryExec), logger.DebugColor)
+			//.SetDebugParam("Exec за секунду", strconv.Itoa(diffCountQueryPerSecond), logger.DebugColor)
+			//logger.SetDebugParam("Exec всего ", strconv.Itoa(rlc.countQueryExec), logger.DebugColor)
 		}
 	}
 }
