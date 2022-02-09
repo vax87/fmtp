@@ -3,8 +3,6 @@ package main
 import (
 	"fdps/fmtp/ora_logger/ora_cntrl"
 	"fdps/fmtp/ora_logger/redis_cntrl"
-	"sync"
-	"time"
 )
 
 var (
@@ -18,9 +16,19 @@ func main() {
 
 	go redisCntrl.Run()
 
+	oraCntrl.SettsChan <- ora_cntrl.OraCntrlSettings{
+		Hostname:         "192.168.1.30",
+		Port:             1521,
+		ServiceName:      "metplan",
+		UserName:         "fmtp_log",
+		Password:         "log",
+		LogStoreMaxCount: 2400000,
+		LogStoreDays:     30,
+	}
+
 	redisCntrl.SettsChan <- redis_cntrl.RedisCntrlSettings{
-		//Hostname: "192.168.1.24", // from lemz
-		Hostname: "127.0.0.1", // from home
+		Hostname: "192.168.1.24", // from lemz
+		//Hostname: "127.0.0.1", // from home
 		Port:     6389,
 		DbId:     0,
 		UserName: "",
@@ -31,19 +39,29 @@ func main() {
 		MaxSendCount:     50,
 	}
 
-	time.Sleep(time.Second)
+	for {
+		select {
+		case <-oraCntrl.RequestMsgChan:
+			redisCntrl.RequestMsgChan <- struct{}{}
 
-	go func() {
-		for idx := 0; idx < 10; idx++ {
-			redisCntrl.OraRequestMsgChan <- struct{}{}
-			time.Sleep(time.Second)
+		case logMsg := <-redisCntrl.SendMsgChan:
+			oraCntrl.ReceiveMsgChan <- logMsg
 		}
-	}()
+	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	// for {
-	// 	select {}
-	// }
-	wg.Wait()
+	// time.Sleep(time.Second)
+
+	// go func() {
+	// 	for idx := 0; idx < 10; idx++ {
+	// 		redisCntrl.OraRequestMsgChan <- struct{}{}
+	// 		time.Sleep(time.Second)
+	// 	}
+	// }()
+
+	// var wg sync.WaitGroup
+	// wg.Add(1)
+	// // for {
+	// // 	select {}
+	// // }
+	// wg.Wait()
 }

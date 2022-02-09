@@ -10,8 +10,6 @@ import (
 const (
 	onlineLogTableName  = "fmtp_online"
 	storageLogTableName = "fmtp_storage"
-
-	maxTextLen = 2000
 )
 
 // текст запроса кол-ва строк в таблице tableName.

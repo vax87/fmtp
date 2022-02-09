@@ -3,16 +3,12 @@ package ora_cntrl
 import (
 	"database/sql"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	_ "github.com/godror/godror"
 	"github.com/golang-collections/go-datastructures/queue"
-
-	"fdps/fmtp/chief/chief_state"
-	"fdps/go_utils/logger"
 
 	"fdps/fmtp/fmtp_log"
 )
@@ -23,21 +19,6 @@ const (
 	onlineLogMaxCount = 1000  // кол-во хранимых логов в таблице онлайн сообщений
 	maxQueryExec      = 100   //кол-во логов, записываемых за раз
 )
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-func createLoggerState(dbErr error) chief_state.LoggerState {
-	retValue := chief_state.LoggerState{
-		LoggerConnected:   chief_state.StateOk,
-		LoggerDbConnected: chief_state.StateOk,
-		LoggerVersion:     "1.0.0",
-	}
-	if dbErr != nil {
-		retValue.LoggerDbConnected = chief_state.StateError
-		retValue.LoggerDbError = dbErr.Error()
-	}
-	return retValue
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,11 +49,11 @@ const (
 type OraLoggerController struct {
 	sync.Mutex
 
-	SettingsChan chan OraLoggerSettings       // канал приема новых настроек контроллера
-	MessChan     chan fmtp_log.LogMessage     // канал приема новых сообщений
-	StateChan    chan chief_state.LoggerState // канал отправки состояния подключения к БД
+	SettsChan      chan OraCntrlSettings      // канал приема новых настроек контроллера
+	ReceiveMsgChan chan []fmtp_log.LogMessage // канал приема новых сообщений
+	RequestMsgChan chan struct{}
 
-	currentSettings OraLoggerSettings
+	curSetts OraCntrlSettings
 
 	logMsgBuffer []fmtp_log.LogMessage // очередь логов
 	queryQueue   *queue.PriorityQueue  // очередь сообщений для записи в БД
@@ -103,9 +84,9 @@ func NewOraController() *OraLoggerController {
 
 // инициализация параметрами по умолчанию
 func (rlc *OraLoggerController) Init() *OraLoggerController {
-	rlc.MessChan = make(chan fmtp_log.LogMessage, 1024)
-	rlc.SettingsChan = make(chan OraLoggerSettings)
-	rlc.StateChan = make(chan chief_state.LoggerState, 1)
+	rlc.ReceiveMsgChan = make(chan []fmtp_log.LogMessage, 1024)
+	rlc.SettsChan = make(chan OraCntrlSettings, 1)
+	rlc.RequestMsgChan = make(chan struct{}, 1)
 
 	rlc.queryQueue = queue.NewPriorityQueue(10000)
 
@@ -130,15 +111,14 @@ func (rlc *OraLoggerController) Run() {
 	for {
 		select {
 
-		case newSettings := <-rlc.SettingsChan:
-			if isDbEqual, isStorEqual := rlc.currentSettings.equal(newSettings); !isDbEqual || !isStorEqual {
-				rlc.currentSettings = newSettings
+		case newSettings := <-rlc.SettsChan:
+			if isDbEqual, isStorEqual := rlc.curSetts.equal(newSettings); !isDbEqual || !isStorEqual {
+				rlc.curSetts = newSettings
 
 				if !isDbEqual {
 					if rlc.dbSuccess {
 						rlc.disconnectFromDb()
 					}
-					rlc.StateChan <- createLoggerState(rlc.connectToDb())
 				}
 				if !isStorEqual {
 					rlc.checkLogCount()
@@ -147,25 +127,11 @@ func (rlc *OraLoggerController) Run() {
 			}
 
 		// получено новое сообщение
-		case logMsg := <-rlc.MessChan:
+		case logMsgs := <-rlc.ReceiveMsgChan:
 			rlc.countRecvMsg++
-			logger.SetDebugParam("Размер буфера сообщений", strconv.Itoa(len(rlc.logMsgBuffer)), logger.DebugColor)
-			logger.SetDebugParam("Размер очереди запросов", strconv.Itoa(rlc.queryQueue.Len()), logger.DebugColor)
-			//if rlc.queryQueue.Len() > 1000000 {
-			if len(rlc.logMsgBuffer) > 1000000 {
-				continue
-			}
-			// проверяем длину текста (max 2000)
-			if len(logMsg.Text) > maxTextLen {
-				logMsg.Text = logMsg.Text[:maxTextLen]
-			}
 
-			// rlc.queryQueue.Put(queueItem{
-			// 	queryText: oraInsertLogQuery(logMsg),
-			// 	priority:  LogPriority,
-			// })
 			rlc.Lock()
-			rlc.logMsgBuffer = append(rlc.logMsgBuffer, logMsg)
+			rlc.logMsgBuffer = append(rlc.logMsgBuffer, logMsgs...)
 			rlc.Unlock()
 			rlc.curInsertCount++
 
@@ -184,8 +150,6 @@ func (rlc *OraLoggerController) Run() {
 				} else {
 					rlc.canExecute = true
 				}
-
-				rlc.StateChan <- createLoggerState(execErr)
 			} else {
 				rlc.canExecute = true
 			}
@@ -198,9 +162,7 @@ func (rlc *OraLoggerController) Run() {
 
 		// сработал тикер подключения к БД
 		case <-rlc.connectDbTicker.C:
-			if !rlc.dbSuccess {
-				rlc.StateChan <- createLoggerState(rlc.connectToDb())
-			}
+			_ = rlc.connectToDb()
 
 		// сработал тикер проверки времени жизни логов
 		case <-rlc.logLifetimeTicker.C:
@@ -225,7 +187,7 @@ func (rlc *OraLoggerController) connectToDb() error {
 
 	// user/pass@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))
 	var errOpen error
-	rlc.db, errOpen = sql.Open("godror", rlc.currentSettings.ConnString())
+	rlc.db, errOpen = sql.Open("godror", rlc.curSetts.ConnString())
 
 	if errOpen != nil {
 		rlc.disconnectFromDb()
@@ -256,14 +218,14 @@ func (rlc *OraLoggerController) disconnectFromDb() {
 
 func (rlc *OraLoggerController) checkLogCount() {
 	rlc.queryQueue.Put(queueItem{
-		queryText: oraCheckLogCountQuery(onlineLogMaxCount, rlc.currentSettings.LogStoreMaxCount),
+		queryText: oraCheckLogCountQuery(onlineLogMaxCount, rlc.curSetts.LogStoreMaxCount),
 		priority:  CheckLogCountPriority,
 	})
 	rlc.checkQueryQueue()
 }
 
 func (rlc *OraLoggerController) checkLogLivetime() {
-	oldLogDate := time.Now().AddDate(0, 0, -rlc.currentSettings.LogStoreDays)
+	oldLogDate := time.Now().AddDate(0, 0, -rlc.curSetts.LogStoreDays)
 
 	rlc.queryQueue.Put(queueItem{
 		queryText: oraCheckLogLivetimeQuery(oldLogDate.Format(timeFormat)),
@@ -316,6 +278,8 @@ func (rlc *OraLoggerController) checkQueryQueue() {
 						priority:  LogPriority,
 					})
 				}
+			} else {
+				rlc.RequestMsgChan <- struct{}{}
 			}
 		}
 

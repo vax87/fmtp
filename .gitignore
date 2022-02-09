@@ -13,3 +13,4 @@ chief/__debug_bin
 /chief/*.exe
 /chief/fdps_imit/*.exe
 /chief/fdps_imit/__debug_bin
+/ora_logger/__debug_bin

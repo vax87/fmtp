@@ -10,6 +10,10 @@ import (
 	"github.com/go-redis/redis"
 )
 
+const (
+	maxTextLen = 2000
+)
+
 type RedisLogController struct {
 	LogMsgChan         chan fmtp_log.LogMessage
 	SettsChan          chan RedisLoggerSettings
@@ -97,7 +101,12 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error
 	values = append(values, len(msgs))
 
 	for idx, val := range msgs {
-		values = append(values, fmt.Sprintf("msg%d", idx))
+		// проверяем длину текста
+		if len(val.Text) > maxTextLen {
+			val.Text = val.Text[:maxTextLen]
+		}
+
+		values = append(values, fmt.Sprintf("msg%2d", idx))
 		values = append(values, val)
 	}
 	err := rc.redisClnt.XAdd(context.Background(),
