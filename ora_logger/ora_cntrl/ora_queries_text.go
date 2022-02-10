@@ -22,22 +22,6 @@ func oraCheckLogLivetimeQuery(dateTimeString string) string {
 	return fmt.Sprintf("BEGIN LOG_PROC_PKG.CHECK_LOG_LIFETIME('%s'); COMMIT; END;", dateTimeString)
 }
 
-// текст запроса обновления состояния канала.
-// \todo это можно записывать в БД из конфигуратора
-// func oraUpdateChannelStateQuery(chState channel_state.ChannelState) string {
-// 	var queryStr strings.Builder
-// 	queryStr.WriteString("DECLARE ")
-// 	queryStr.WriteString("chSt LOG_PROC_PKG.channel_state; ")
-// 	queryStr.WriteString("BEGIN ")
-// 	queryStr.WriteString(fmt.Sprintf("chSt.m_localname :='%s'; ", chState.LocalName))
-// 	queryStr.WriteString(fmt.Sprintf("chSt.m_remotename := '%s'; ", chState.RemoteName))
-// 	queryStr.WriteString(fmt.Sprintf("chSt.m_workingstate := '%s'; ", chState.DaemonState))
-// 	queryStr.WriteString(fmt.Sprintf("chSt.m_fmtpstate := '%s'; ", chState.FmtpState))
-
-// 	queryStr.WriteString("LOG_PROC_PKG.channel_state_changed(chSt); COMMIT; END;")
-// 	return queryStr.String()
-// }
-
 // текст запроса добавления сообщения журнала в БД.
 func oraInsertLogQuery(logMsgs ...fmtp_log.LogMessage) string {
 	var queryText strings.Builder

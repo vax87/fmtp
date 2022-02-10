@@ -43,7 +43,7 @@ func main() {
 	recvTicker := time.NewTicker(recvInterval)
 	var msgId int64
 
-	testTicker := time.NewTicker(20 * time.Millisecond)
+	testTicker := time.NewTicker(300 * time.Millisecond)
 	msgs := pb.MsgList{}
 
 	var expectBuffer []*pb.Msg

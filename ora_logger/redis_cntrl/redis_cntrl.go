@@ -4,16 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fdps/fmtp/fmtp_log"
+	"fdps/fmtp/ora_logger/metrics_cntrl"
 	"fmt"
 	"sort"
+	"strconv"
+	"time"
 
 	"github.com/go-redis/redis"
 )
 
-type RedisController struct {
+type RedisCntrl struct {
 	RequestMsgChan chan struct{}
 	SendMsgChan    chan []fmtp_log.LogMessage
 	SettsChan      chan RedisCntrlSettings
+
+	MetricsChan chan metrics_cntrl.RedisMetrics
 
 	redisClnt      *redis.Client
 	setts          RedisCntrlSettings
@@ -22,75 +27,80 @@ type RedisController struct {
 	prevReadIds []string
 }
 
-func NewRedisController() *RedisController {
-	return &RedisController{
-		RequestMsgChan: make(chan struct{}, 1),
-		SendMsgChan:    make(chan []fmtp_log.LogMessage, 1),
+func NewRedisController() *RedisCntrl {
+	return &RedisCntrl{
+		RequestMsgChan: make(chan struct{}, 10),
+		SendMsgChan:    make(chan []fmtp_log.LogMessage, 10),
 		SettsChan:      make(chan RedisCntrlSettings, 1),
+		MetricsChan:    make(chan metrics_cntrl.RedisMetrics, 10),
 		successConnect: false,
 	}
 }
 
-func (rc *RedisController) Run() {
+func (c *RedisCntrl) Run() {
 	for {
 		select {
 
-		case setts := <-rc.SettsChan:
-			if rc.setts != setts {
-				rc.setts = setts
-				rc.connectToServer()
+		case setts := <-c.SettsChan:
+			if c.setts != setts {
+				c.setts = setts
+				c.connectToServer()
 			}
 
-		case <-rc.RequestMsgChan:
-			if len(rc.prevReadIds) > 0 {
-				if err := rc.delLogsFromStream(); err != nil {
+		case <-c.RequestMsgChan:
+			if len(c.prevReadIds) > 0 {
+				if err := c.delLogsFromStream(); err != nil {
 					fmt.Printf("Error DEL from stream %v", err)
 				} else {
-					rc.prevReadIds = rc.prevReadIds[:0]
+					c.prevReadIds = c.prevReadIds[:0]
 				}
 			}
 
-			if msgs, err := rc.readLogsFromStream(); err != nil {
+			if msgs, err := c.readLogsFromStream(); err != nil {
 				fmt.Printf("Error READ from stream %v", err)
 			} else {
 				if len(msgs) > 0 {
-					rc.SendMsgChan <- msgs
+					c.SendMsgChan <- msgs
 				}
 			}
 		}
 	}
 }
 
-func (rc *RedisController) connectToServer() {
-	rc.redisClnt = redis.NewClient(&redis.Options{
-		Addr:    fmt.Sprintf("%s:%d", rc.setts.Hostname, rc.setts.Port),
+func (c *RedisCntrl) connectToServer() {
+	c.redisClnt = redis.NewClient(&redis.Options{
+		Addr:    fmt.Sprintf("%s:%d", c.setts.Hostname, c.setts.Port),
 		Network: "tcp",
 	})
-	_, err := rc.redisClnt.Ping(context.Background()).Result()
-	rc.successConnect = err == nil
+	_, err := c.redisClnt.Ping(context.Background()).Result()
+	c.successConnect = err == nil
 	if err != nil {
 		fmt.Printf("Ошибка подключения к Redis серверу: %v", err)
 	}
 }
 
-func (rc *RedisController) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
+func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 	retMsg := make([]fmtp_log.LogMessage, 0)
-	if rc.successConnect {
-		readSlice := rc.redisClnt.XRead(context.Background(),
+	if c.successConnect {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second)
+		defer cancelFunc()
+		readSlice := c.redisClnt.XRead(ctx,
 			&redis.XReadArgs{
 				Streams: []string{"FmtpLog", "0"},
-				Count:   1,
+				Count:   10,
 				Block:   0,
 			})
 
 		//fmt.Printf("Stream %s", readSlice.String())
+		var readCnt metrics_cntrl.RedisMetrics
 
 		for _, xStreamVal := range readSlice.Val() {
 			//fmt.Printf("Stream %s", xStreamVal.Stream)
 
+			readCnt.Keys += len(xStreamVal.Messages)
 			for _, msgVal := range xStreamVal.Messages {
 				//	fmt.Printf("\tMsg id %s\n", msgVal.ID)
-				rc.prevReadIds = append(rc.prevReadIds, msgVal.ID)
+				c.prevReadIds = append(c.prevReadIds, msgVal.ID)
 
 				msgKeys := make([]string, 0)
 				for key, _ := range msgVal.Values {
@@ -98,10 +108,14 @@ func (rc *RedisController) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 				}
 				countMsg, ok := msgVal.Values["count"]
 				if ok {
-					fmt.Printf("count MSG %d\n", countMsg)
+					if val, err := strconv.Atoi(countMsg.(string)); err == nil {
+						readCnt.Msg += val
+					}
 				}
-
 				sort.Strings(msgKeys)
+
+				//readCnt.Keys += len(msgKeys)
+
 				for _, key := range msgKeys {
 					if msgString, ok := msgVal.Values[key].(string); ok {
 						var logMsg fmtp_log.LogMessage
@@ -115,16 +129,17 @@ func (rc *RedisController) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 				}
 			}
 		}
+		c.MetricsChan <- readCnt
 		return retMsg, readSlice.Err()
 	}
 	return retMsg, fmt.Errorf("Нет подключения к Redis")
 }
 
-func (rc *RedisController) delLogsFromStream() error {
-	if rc.successConnect {
-		return rc.redisClnt.XDel(context.Background(),
+func (c *RedisCntrl) delLogsFromStream() error {
+	if c.successConnect {
+		return c.redisClnt.XDel(context.Background(),
 			"FmtpLog",
-			rc.prevReadIds...).Err()
+			c.prevReadIds...).Err()
 	}
 	return fmt.Errorf("Нет подключения к Redis")
 }

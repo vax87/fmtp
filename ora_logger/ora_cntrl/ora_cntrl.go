@@ -11,20 +11,30 @@ import (
 	"github.com/golang-collections/go-datastructures/queue"
 
 	"fdps/fmtp/fmtp_log"
+	"fdps/fmtp/ora_logger/metrics_cntrl"
 )
 
 const (
 	timeFormat        = "2006-01-02 15:04:05"
-	insertCountCheck  = 10000 // кол-во запросов INSERT в БД, после чего следует проверить кол-во хранимых сообщений
-	onlineLogMaxCount = 1000  // кол-во хранимых логов в таблице онлайн сообщений
-	maxQueryExec      = 100   //кол-во логов, записываемых за раз
+	insertCountCheck  = 1000 // кол-во запросов INSERT в БД, после чего следует проверить кол-во хранимых сообщений
+	onlineLogMaxCount = 1000 // кол-во хранимых логов в таблице онлайн сообщений
+	maxQueryExec      = 100  //кол-во логов, записываемых за раз
+	errMetricLabel    = "error"
 )
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+const (
+	LogPriority = iota
+	CheckLogCountPriority
+	CheckLogLivetimePriority
+	HeartbeatPriority
+)
+
 type queueItem struct {
 	queryText string
 	priority  int
+	countMsg  int
 }
 
 func (qi queueItem) Compare(other queue.Item) int {
@@ -36,22 +46,31 @@ func (qi queueItem) Compare(other queue.Item) int {
 	return -1
 }
 
-const (
-	LogPriority = iota
-	CheckLogCountPriority
-	CheckLogLivetimePriority
-	HeartbeatPriority
-)
+func PriorToString(val int) (priorStr string) {
+	switch val {
+	case LogPriority:
+		priorStr = "log"
+	case CheckLogCountPriority:
+		priorStr = "check_count"
+	case CheckLogLivetimePriority:
+		priorStr = "check_time"
+	case HeartbeatPriority:
+		priorStr = "heartbeat"
+	}
+	return
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // контроллер, выполняющий запись логов в БД
-type OraLoggerController struct {
+type OraCntrlr struct {
 	sync.Mutex
 
 	SettsChan      chan OraCntrlSettings      // канал приема новых настроек контроллера
 	ReceiveMsgChan chan []fmtp_log.LogMessage // канал приема новых сообщений
 	RequestMsgChan chan struct{}
+
+	MetricsChan chan metrics_cntrl.OraMetrics
 
 	curSetts OraCntrlSettings
 
@@ -62,255 +81,239 @@ type OraLoggerController struct {
 	dbSuccess  bool    // успешность подключения к БД
 	canExecute bool    // возможность выполнять запросы к БД
 
-	execQueryChan  chan string   // канал для передачи запросов записи логов на выполнение
-	execResultChan chan error    // канал для передачи результатов выполнения
-	execTermChan   chan struct{} // канал для завершения подпрограммы выполнения запросов
+	execQueryChan  chan queueItem // канал для передачи запросов записи логов на выполнение
+	execResultChan chan error     // канал для передачи результатов выполнения
+	execTermChan   chan struct{}  // канал для завершения подпрограммы выполнения запросов
 
 	logLifetimeTicker *time.Ticker // тикер проверки времени жизни логов
 	pingDbTicker      *time.Ticker // тикер пинга БД
-	connectDbTicker   *time.Ticker // тикер подключения к БД
 	curInsertCount    uint64       // кол-во выполнненых запросов INSERT (для проверки кол-ва хранимых логов)
-
-	countRecvMsg             int64
-	countRecvMsgPrevSecond   int64
-	countQueryExec           int
-	countQueryExecPrevSecond int
 }
 
-// конструктор
-func NewOraController() *OraLoggerController {
-	return new(OraLoggerController).Init()
+func NewOraController() *OraCntrlr {
+	return &OraCntrlr{
+		ReceiveMsgChan:    make(chan []fmtp_log.LogMessage, 1024),
+		SettsChan:         make(chan OraCntrlSettings, 1),
+		RequestMsgChan:    make(chan struct{}, 10),
+		MetricsChan:       make(chan metrics_cntrl.OraMetrics, 10),
+		queryQueue:        queue.NewPriorityQueue(10000),
+		canExecute:        false,
+		execQueryChan:     make(chan queueItem, 1),
+		execResultChan:    make(chan error, 1),
+		execTermChan:      make(chan struct{}, 1),
+		pingDbTicker:      time.NewTicker(3 * time.Second),
+		logLifetimeTicker: time.NewTicker(12 * time.Hour),
+	}
 }
 
-// инициализация параметрами по умолчанию
-func (rlc *OraLoggerController) Init() *OraLoggerController {
-	rlc.ReceiveMsgChan = make(chan []fmtp_log.LogMessage, 1024)
-	rlc.SettsChan = make(chan OraCntrlSettings, 1)
-	rlc.RequestMsgChan = make(chan struct{}, 1)
+func (c *OraCntrlr) Run() {
+	c.dbSuccess = false
 
-	rlc.queryQueue = queue.NewPriorityQueue(10000)
-
-	rlc.canExecute = false
-
-	rlc.execQueryChan = make(chan string, 1)
-	rlc.execResultChan = make(chan error, 1)
-	rlc.execTermChan = make(chan struct{}, 1)
-
-	rlc.pingDbTicker = time.NewTicker(10 * time.Second)
-	rlc.connectDbTicker = time.NewTicker(10 * time.Second)
-	rlc.logLifetimeTicker = time.NewTicker(12 * time.Hour)
-
-	return rlc
-}
-
-func (rlc *OraLoggerController) Run() {
-	rlc.dbSuccess = false
-
-	metricTimer := time.NewTicker(1 * time.Second)
+	c.MetricsChan <- metrics_cntrl.OraMetrics{
+		Count:  0,
+		Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(LogPriority)},
+	}
+	c.MetricsChan <- metrics_cntrl.OraMetrics{
+		Count:  0,
+		Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(CheckLogCountPriority)},
+	}
+	c.MetricsChan <- metrics_cntrl.OraMetrics{
+		Count:  0,
+		Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(CheckLogLivetimePriority)},
+	}
+	c.MetricsChan <- metrics_cntrl.OraMetrics{
+		Count:  0,
+		Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(HeartbeatPriority)},
+	}
+	c.MetricsChan <- metrics_cntrl.OraMetrics{
+		Count:  0,
+		Labels: map[string]string{metrics_cntrl.OraTypeLabel: errMetricLabel},
+	}
 
 	for {
 		select {
 
-		case newSettings := <-rlc.SettsChan:
-			if isDbEqual, isStorEqual := rlc.curSetts.equal(newSettings); !isDbEqual || !isStorEqual {
-				rlc.curSetts = newSettings
+		case newSettings := <-c.SettsChan:
+			if isDbEqual, isStorEqual := c.curSetts.equal(newSettings); !isDbEqual || !isStorEqual {
+				c.curSetts = newSettings
 
 				if !isDbEqual {
-					if rlc.dbSuccess {
-						rlc.disconnectFromDb()
+					if c.dbSuccess {
+						c.disconnectFromDb()
+					}
+					if err := c.connectToDb(); err != nil {
+						log.Printf("Fail connect to DB: %v\n", err)
+					} else {
+						log.Println("Success connect to DB")
 					}
 				}
 				if !isStorEqual {
-					rlc.checkLogCount()
-					rlc.checkLogLivetime()
+					c.checkLogCount()
+					c.checkLogLivetime()
 				}
 			}
 
-		// получено новое сообщение
-		case logMsgs := <-rlc.ReceiveMsgChan:
-			rlc.countRecvMsg++
+		case logMsgs := <-c.ReceiveMsgChan:
+			c.Lock()
+			c.logMsgBuffer = append(c.logMsgBuffer, logMsgs...)
+			c.Unlock()
+			c.curInsertCount++
 
-			rlc.Lock()
-			rlc.logMsgBuffer = append(rlc.logMsgBuffer, logMsgs...)
-			rlc.Unlock()
-			rlc.curInsertCount++
-
-			if rlc.curInsertCount > insertCountCheck {
-				rlc.checkLogCount()
-				rlc.curInsertCount = 0
+			if c.curInsertCount > insertCountCheck {
+				c.checkLogCount()
+				c.curInsertCount = 0
 			}
-			rlc.checkQueryQueue()
+			c.checkQueryQueue()
 
-		// пришел результат выполнения запроса
-		case execErr := <-rlc.execResultChan:
+		case execErr := <-c.execResultChan:
 			if execErr != nil {
 				if strings.Contains(execErr.Error(), "database is closed") ||
 					strings.Contains(execErr.Error(), "server is not accepting clients") {
-					rlc.disconnectFromDb()
+					c.disconnectFromDb()
 				} else {
-					rlc.canExecute = true
+					c.canExecute = true
 				}
 			} else {
-				rlc.canExecute = true
+				c.canExecute = true
 			}
+			c.checkQueryQueue()
 
-			rlc.checkQueryQueue()
+		case <-c.pingDbTicker.C:
+			c.checkHeatrbeat()
 
-		// сработал тикер пинга БД
-		case <-rlc.pingDbTicker.C:
-			rlc.checkHeatrbeat()
-
-		// сработал тикер подключения к БД
-		case <-rlc.connectDbTicker.C:
-			_ = rlc.connectToDb()
-
-		// сработал тикер проверки времени жизни логов
-		case <-rlc.logLifetimeTicker.C:
-			rlc.checkLogLivetime()
-
-		case <-metricTimer.C:
-			//diffCountRecvPerSecond := rlc.countRecvMsg - rlc.countRecvMsgPrevSecond
-			rlc.countRecvMsgPrevSecond = rlc.countRecvMsg
-			//logger.SetDebugParam("Recv за секунду", strconv.FormatInt(diffCountRecvPerSecond, 10), logger.DebugColor)
-			//logger.SetDebugParam("Recv всего ", strconv.FormatInt(rlc.countRecvMsg, 10), logger.DebugColor)
-
-			//diffCountQueryPerSecond := rlc.countQueryExec - rlc.countQueryExecPrevSecond
-			rlc.countQueryExecPrevSecond = rlc.countQueryExec
-			//.SetDebugParam("Exec за секунду", strconv.Itoa(diffCountQueryPerSecond), logger.DebugColor)
-			//logger.SetDebugParam("Exec всего ", strconv.Itoa(rlc.countQueryExec), logger.DebugColor)
+		case <-c.logLifetimeTicker.C:
+			c.checkLogLivetime()
 		}
 	}
 }
 
-func (rlc *OraLoggerController) connectToDb() error {
-	rlc.dbSuccess = false
+func (c *OraCntrlr) connectToDb() error {
+	c.dbSuccess = false
 
-	// user/pass@(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))
 	var errOpen error
-	rlc.db, errOpen = sql.Open("godror", rlc.curSetts.ConnString())
+	c.db, errOpen = sql.Open("godror", c.curSetts.ConnString())
 
 	if errOpen != nil {
-		rlc.disconnectFromDb()
+		c.disconnectFromDb()
 		return errOpen
 	}
 
-	errPing := rlc.db.Ping()
+	errPing := c.db.Ping()
 	if errPing != nil {
-		rlc.disconnectFromDb()
+		c.disconnectFromDb()
 		return errPing
 	} else {
-		rlc.dbSuccess = true
-		rlc.canExecute = true
+		c.dbSuccess = true
+		c.canExecute = true
 
-		go rlc.executeQuery()
+		go c.executeQuery()
 
-		rlc.checkQueryQueue()
+		c.checkQueryQueue()
 	}
 	return nil
 }
 
-func (rlc *OraLoggerController) disconnectFromDb() {
-	rlc.canExecute = false
-	rlc.dbSuccess = false
-	rlc.execTermChan <- struct{}{}
-	rlc.db.Close()
+func (c *OraCntrlr) disconnectFromDb() {
+	c.canExecute = false
+	c.dbSuccess = false
+	c.execTermChan <- struct{}{}
+	c.db.Close()
 }
 
-func (rlc *OraLoggerController) checkLogCount() {
-	rlc.queryQueue.Put(queueItem{
-		queryText: oraCheckLogCountQuery(onlineLogMaxCount, rlc.curSetts.LogStoreMaxCount),
+func (c *OraCntrlr) checkLogCount() {
+	c.queryQueue.Put(queueItem{
+		queryText: oraCheckLogCountQuery(onlineLogMaxCount, c.curSetts.LogStoreMaxCount),
 		priority:  CheckLogCountPriority,
+		countMsg:  1,
 	})
-	rlc.checkQueryQueue()
+	c.checkQueryQueue()
 }
 
-func (rlc *OraLoggerController) checkLogLivetime() {
-	oldLogDate := time.Now().AddDate(0, 0, -rlc.curSetts.LogStoreDays)
+func (c *OraCntrlr) checkLogLivetime() {
+	oldLogDate := time.Now().AddDate(0, 0, -c.curSetts.LogStoreDays)
 
-	rlc.queryQueue.Put(queueItem{
+	c.queryQueue.Put(queueItem{
 		queryText: oraCheckLogLivetimeQuery(oldLogDate.Format(timeFormat)),
 		priority:  CheckLogLivetimePriority,
+		countMsg:  1,
 	})
-	rlc.checkQueryQueue()
+	c.checkQueryQueue()
 }
 
-func (rlc *OraLoggerController) checkHeatrbeat() {
-	if rlc.queryQueue.Empty() {
-		rlc.queryQueue.Put(queueItem{
+func (c *OraCntrlr) checkHeatrbeat() {
+	if c.queryQueue.Empty() {
+		c.RequestMsgChan <- struct{}{}
+
+		c.queryQueue.Put(queueItem{
 			queryText: oraHeartbeatQuery(),
 			priority:  HeartbeatPriority,
+			countMsg:  1,
 		})
-		rlc.checkQueryQueue()
 	}
+	c.checkQueryQueue()
 }
 
-func (rlc *OraLoggerController) checkQueryQueue() {
+func (c *OraCntrlr) checkQueryQueue() {
+	if c.canExecute {
 
-	if rlc.canExecute {
-
-		if rlc.queryQueue.Empty() {
+		if c.queryQueue.Empty() {
 			var toQuery []fmtp_log.LogMessage
 
-			if len(rlc.logMsgBuffer) > 0 {
-				log.Printf("len(rlc.logMsgBuffer) > 0 : %d", len(rlc.logMsgBuffer))
-				rlc.Lock()
-				if len(rlc.logMsgBuffer) > maxQueryExec {
-					toQuery = append(toQuery, rlc.logMsgBuffer[:maxQueryExec]...)
-					log.Printf("\t\tbefore len(rlc.logMsgBuffer) : %d", len(rlc.logMsgBuffer))
-					rlc.logMsgBuffer = rlc.logMsgBuffer[maxQueryExec:]
-					log.Printf("\t\tafter len(rlc.logMsgBuffer) : %d", len(rlc.logMsgBuffer))
-
-					log.Printf("\tlen(rlc.toQuery) > 0 : %d", len(toQuery))
+			if len(c.logMsgBuffer) > 0 {
+				c.Lock()
+				if len(c.logMsgBuffer) > maxQueryExec {
+					toQuery = append(toQuery, c.logMsgBuffer[:maxQueryExec]...)
+					c.logMsgBuffer = c.logMsgBuffer[maxQueryExec:]
 				} else {
-					toQuery = make([]fmtp_log.LogMessage, len(rlc.logMsgBuffer))
-					copy(toQuery, rlc.logMsgBuffer)
-					log.Printf("\t\tbefore len(rlc.logMsgBuffer) : %d", len(rlc.logMsgBuffer))
-					rlc.logMsgBuffer = rlc.logMsgBuffer[:0]
-					log.Printf("\t\tafter len(rlc.logMsgBuffer) : %d", len(rlc.logMsgBuffer))
-
-					log.Printf("\tlen(rlc.toQuery) > 0 : %d", len(toQuery))
+					toQuery = make([]fmtp_log.LogMessage, len(c.logMsgBuffer))
+					copy(toQuery, c.logMsgBuffer)
+					c.logMsgBuffer = c.logMsgBuffer[:0]
 				}
-				rlc.Unlock()
+				c.Unlock()
 
 				if len(toQuery) > 0 {
-					rlc.queryQueue.Put(queueItem{
+					c.queryQueue.Put(queueItem{
 						queryText: oraInsertLogQuery(toQuery...),
 						priority:  LogPriority,
+						countMsg:  len(toQuery),
 					})
 				}
 			} else {
-				rlc.RequestMsgChan <- struct{}{}
+				c.RequestMsgChan <- struct{}{}
 			}
 		}
 
-		if !rlc.queryQueue.Empty() {
-			queries, _ := rlc.queryQueue.Get(1)
+		if !c.queryQueue.Empty() {
+			queries, _ := c.queryQueue.Get(1)
 			if len(queries) == 1 {
-				rlc.canExecute = false
-				rlc.execQueryChan <- queries[0].(queueItem).queryText
+				c.canExecute = false
+				c.execQueryChan <- queries[0].(queueItem)
 			}
 		}
 	}
 }
 
-// функция горутины, в которой будут выполняться запросы к БД
-func (rlc *OraLoggerController) executeQuery() {
+func (c *OraCntrlr) executeQuery() {
 	for {
 		select {
-		// пришел запрос добавления сообщения логов
-		case queryText := <-rlc.execQueryChan:
-			log.Printf("EXEC %d %s\n\n", len(queryText), queryText)
 
-			_, curErr := rlc.db.Exec(queryText)
+		case queueIt := <-c.execQueryChan:
+			_, curErr := c.db.Exec(queueIt.queryText)
 			if curErr != nil {
 				log.Printf("!!! EXEC err %s\n\n", curErr.Error())
+				c.MetricsChan <- metrics_cntrl.OraMetrics{
+					Count:  queueIt.countMsg,
+					Labels: map[string]string{metrics_cntrl.OraTypeLabel: errMetricLabel},
+				}
+			} else {
+				c.MetricsChan <- metrics_cntrl.OraMetrics{
+					Count:  queueIt.countMsg,
+					Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(queueIt.priority)},
+				}
 			}
+			c.execResultChan <- curErr
 
-			rlc.countQueryExec++
-			rlc.execResultChan <- curErr
-
-		// необходимо завершить горутину
-		case <-rlc.execTermChan:
+		case <-c.execTermChan:
 			return
 		}
 	}

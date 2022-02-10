@@ -1,20 +1,34 @@
 package main
 
 import (
+	"fdps/fmtp/ora_logger/metrics_cntrl"
 	"fdps/fmtp/ora_logger/ora_cntrl"
 	"fdps/fmtp/ora_logger/redis_cntrl"
+	"fdps/go_utils/prom_metrics"
 )
 
 var (
-	oraCntrl   = ora_cntrl.NewOraController()
-	redisCntrl = redis_cntrl.NewRedisController()
+	metricsCntrl = metrics_cntrl.NewMetricsCntrl()
+	oraCntrl     = ora_cntrl.NewOraController()
+	redisCntrl   = redis_cntrl.NewRedisController()
 )
 
 func main() {
-
+	go metricsCntrl.Run()
 	go oraCntrl.Run()
-
 	go redisCntrl.Run()
+
+	//!!! только один раз можно вызвать
+	metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
+		PusherIntervalSec: 1,
+		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
+		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
+		GatewayJob:       "fmtp",
+		CollectNamespace: "fmtp",
+		CollectSubsystem: "logger",
+		CollectLabels:    map[string]string{"host": "192.168.10.219"},
+	}
+	//!!!
 
 	oraCntrl.SettsChan <- ora_cntrl.OraCntrlSettings{
 		Hostname:         "192.168.1.30",
@@ -46,6 +60,12 @@ func main() {
 
 		case logMsg := <-redisCntrl.SendMsgChan:
 			oraCntrl.ReceiveMsgChan <- logMsg
+
+		case redisMt := <-redisCntrl.MetricsChan:
+			metricsCntrl.RedisMetricsChan <- redisMt
+
+		case oraMt := <-oraCntrl.MetricsChan:
+			metricsCntrl.OraMetricsChan <- oraMt
 		}
 	}
 

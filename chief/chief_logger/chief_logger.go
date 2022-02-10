@@ -46,7 +46,7 @@ func (cl *ChiefLogger) Work() {
 				UserName: "",
 				Password: "",
 
-				StreamMaxCount:   1000,
+				StreamMaxCount:   10000,
 				SendIntervalMSec: 20,
 				MaxSendCount:     50,
 			}
