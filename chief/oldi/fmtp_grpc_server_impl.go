@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"fdps/fmtp/chief/chief_metrics"
 	"fdps/fmtp/chief/chief_settings"
 	pb "fdps/fmtp/chief/proto/fmtp"
 	"fdps/fmtp/chief_configurator"
@@ -48,6 +49,8 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 	}
 	var errorString string
 
+	metric := chief_metrics.ProvMetrics{RecvCount: len(msg.List)}
+
 	for _, val := range msg.List {
 		chId := chief_configurator.ChiefCfg.GetChannelIdByCid(val.Cid)
 		if chId != -1 {
@@ -56,8 +59,10 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 			errNoChannel := fmt.Sprintf("Не найден FMTP канал для отправки сообщения. CID (remote ATC): %s", val.Cid)
 			errorString += errNoChannel + "\n"
 			logger.PrintfErr(errNoChannel)
+			metric.MissedCount++
 		}
 	}
+	chief_metrics.ProvMetricsChan <- metric
 	return &pb.SvcResult{Errormessage: errorString}, status.New(codes.OK, "").Err()
 }
 
@@ -80,6 +85,7 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 		copy(toSend, s.msgToFdps)
 		s.msgToFdps = s.msgToFdps[:0]
 	}
+	chief_metrics.ProvMetricsChan <- chief_metrics.ProvMetrics{SendCount: len(toSend)}
 	return &pb.MsgList{List: toSend}, status.New(codes.OK, "").Err()
 }
 
@@ -128,5 +134,6 @@ func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 		} else {
 			s.msgToFdps = s.msgToFdps[maxIdx+1 : len(s.msgToFdps)]
 		}
+		chief_metrics.ProvMetricsChan <- chief_metrics.ProvMetrics{TimeoutCount: maxIdx}
 	}
 }

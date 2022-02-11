@@ -1,15 +1,7 @@
 package metrics_cntrl
 
 import (
-	"time"
-
 	prom_metrics "fdps/go_utils/prom_metrics"
-)
-
-const (
-	address      = ":55566"
-	sendInterval = 300 * time.Millisecond
-	recvInterval = 300 * time.Millisecond
 )
 
 const (

@@ -2,6 +2,7 @@ package chief_logger
 
 import (
 	"context"
+	"fdps/fmtp/chief/chief_metrics"
 	"fdps/fmtp/fmtp_log"
 	"fmt"
 	"sync"
@@ -117,7 +118,16 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error
 			ID:     "",
 			Values: values,
 		}).Err()
-
+	if err == nil {
+		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{
+			Keys: 1,
+			Msg:  len(msgs),
+		}
+	} else {
+		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{
+			Err: 1,
+		}
+	}
 	//fmt.Printf("\t\tEND pushLogsToStream %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 	return err
 }

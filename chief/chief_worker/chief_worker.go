@@ -3,12 +3,14 @@ package chief_worker
 import (
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/chief/chief_logger"
+	"fdps/fmtp/chief/chief_metrics"
 	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/chief/oldi"
 	"fdps/fmtp/chief/tky"
 	"fdps/fmtp/chief/version"
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/chief_configurator"
+	"fdps/go_utils/prom_metrics"
 	"sync"
 )
 
@@ -36,6 +38,21 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 
 	chief_state.CommonChiefState.ControllerVersion = version.Release
 	chief_state.CommonChiefState.DockerVersion = dockerVersion
+
+	var metricsCntrl = chief_metrics.NewChiefMetricsCntrl()
+	go metricsCntrl.Run()
+
+	//!!! только один раз можно вызвать
+	metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
+		PusherIntervalSec: 1,
+		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
+		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
+		GatewayJob:       "fmtp",
+		CollectNamespace: "fmtp",
+		CollectSubsystem: "controller",
+		CollectLabels:    map[string]string{"host": "192.168.10.219"},
+	}
+	//!!!
 
 	for {
 		select {

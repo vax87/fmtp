@@ -18,6 +18,7 @@ import (
 
 	"fdps/fmtp/channel/channel_settings"
 	"fdps/fmtp/channel/channel_state"
+	"fdps/fmtp/chief/chief_metrics"
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
 	pb "fdps/fmtp/chief/proto/fmtp"
@@ -252,11 +253,12 @@ func (cc *ChiefChannelServer) Work() {
 
 					var dataMsg DataMsg
 					if err := json.Unmarshal(curWsPkg.Data, &dataMsg); err == nil {
+						var localAtc string
 						var remoteAtc string
 						var channelType string
 						for _, val := range cc.channelSetts.ChSettings {
 							if val.Id == dataMsg.ChannelID {
-								//localAtc = val.LocalATC
+								localAtc = val.LocalATC
 								remoteAtc = val.RemoteATC
 								channelType = val.DataType
 								break
@@ -276,6 +278,13 @@ func (cc *ChiefChannelServer) Work() {
 							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityInfo, chief_settings.OLDIProvider,
 								fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
 							cc.ToFdpsPacketChan <- &oldiPkg
+
+							chief_metrics.ChanMetricsChan <- chief_metrics.ChanMetrics{
+								Tp:     chief_metrics.ChanTpRecv,
+								LocAtc: localAtc,
+								RemAtc: remoteAtc,
+								Count:  1,
+							}
 						}
 					}
 				}
@@ -346,6 +355,13 @@ func (cc *ChiefChannelServer) ProcessOldiPacket(msgWithId pb.MsgWithChanId) {
 		} else {
 			if cc.chStates[msgWithId.ChanId].ChannelState.FmtpState == chValidStStr {
 				cc.wsServer.SendDataChan <- web_sock.WsPackage{Data: oldiData, Sock: sock}
+
+				chief_metrics.ChanMetricsChan <- chief_metrics.ChanMetrics{
+					Tp:     chief_metrics.ChanTpSend,
+					LocAtc: cc.chStates[msgWithId.ChanId].LocalName,
+					RemAtc: cc.chStates[msgWithId.ChanId].RemoteName,
+					Count:  1,
+				}
 			}
 		}
 	} else {

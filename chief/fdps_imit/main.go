@@ -24,9 +24,13 @@ const (
 )
 
 const (
-	metricSend   = "send"
-	metricRecv   = "recv"
-	metricMissed = "missed"
+	metricImitMsg = "msg"
+
+	metricTypeLabel = "tp"
+
+	tpSend   = "send"
+	tpRecv   = "recv"
+	tpMissed = "miss"
 )
 
 func main() {
@@ -47,7 +51,7 @@ func main() {
 	msgs := pb.MsgList{}
 
 	var expectBuffer []*pb.Msg
-	checkExpectedTicker := time.NewTicker(sendInterval * 3)
+	checkExpectedTicker := time.NewTicker(sendInterval * 10)
 	var expectMutex sync.Mutex
 
 	/////////////////////////////////////////////////////////////////////////
@@ -56,17 +60,17 @@ func main() {
 		PusherIntervalSec: 1,
 		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
 		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
-		GatewayJob:       "test",
+		GatewayJob:       "fmtp",
 		CollectNamespace: "fmtp",
-		CollectSubsystem: "fdps_imit",
+		CollectSubsystem: "imit",
 		CollectLabels:    map[string]string{"host": "192.168.10.219"},
 	})
-
-	prom_metrics.AppendCounter(metricSend, "Кол-во отправленных FMTP сообщений")
-	prom_metrics.AppendCounter(metricRecv, "Кол-во полученных FMTP сообщений")
-	prom_metrics.AppendCounter(metricMissed, "Кол-во отправленных, но не принятых FMTP сообщений")
-
+	prom_metrics.AppendCounterVec(metricImitMsg, "Имитатор FMTP сообщений", []string{metricTypeLabel})
 	prom_metrics.Initialize()
+
+	prom_metrics.AddToCounterVec(metricImitMsg, 0, map[string]string{metricTypeLabel: tpSend})
+	prom_metrics.AddToCounterVec(metricImitMsg, 0, map[string]string{metricTypeLabel: tpRecv})
+	prom_metrics.AddToCounterVec(metricImitMsg, 0, map[string]string{metricTypeLabel: tpMissed})
 
 	/////////////////////////////////////////////////////////////////////////
 
@@ -115,7 +119,7 @@ func main() {
 				if err != nil {
 					log.Printf("Error SendMsg: %v", err)
 				} else {
-					prom_metrics.AddToCollector(metricSend, len(msgs.List))
+					prom_metrics.AddToCounterVec(metricImitMsg, len(msgs.List), map[string]string{metricTypeLabel: tpSend})
 					msgs.List = msgs.List[:0]
 				}
 				expectMutex.Unlock()
@@ -139,7 +143,7 @@ func main() {
 				// 	fmt.Println("\t empty list \n\n")
 				// }
 				expectMutex.Lock()
-				prom_metrics.AddToCollector(metricRecv, len(r.List))
+				prom_metrics.AddToCounterVec(metricImitMsg, len(r.List), map[string]string{metricTypeLabel: tpRecv})
 
 				for _, v := range r.List {
 
@@ -175,7 +179,7 @@ func main() {
 			}
 
 			if maxDelIdx != -1 {
-				prom_metrics.AddToCollector(metricMissed, maxDelIdx)
+				prom_metrics.AddToCounterVec(metricImitMsg, maxDelIdx, map[string]string{metricTypeLabel: tpMissed})
 				if maxDelIdx < len(expectBuffer)-1 {
 					expectBuffer = expectBuffer[maxDelIdx+1:]
 				} else {
