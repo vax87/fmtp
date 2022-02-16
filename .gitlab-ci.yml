@@ -20,20 +20,17 @@ stages:
 build:
   stage: build
   only:
-    - develop
+    - redis_log
   script: 
   - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/fmtp
   - cd  $SRC/fmtp
   - git checkout redis_log
   - git pull  
-  - mkdir -p $SRC/go_utils 
-  - git clone ssh://git@192.168.1.24:222/go_utils/logger.git $SRC/go_utils/logger
-  - git clone ssh://git@192.168.1.24:222/go_utils/prom_metrics.git $SRC/go_utils/prom_metrics
-  - git clone ssh://git@192.168.1.24:222/go_utils/web_sock.git $SRC/go_utils/web_sock  
-  - git clone ssh://git@192.168.1.24:222/fdps/utils.git $SRC/utils  
-  - cd  $SRC/utils
-  - git checkout gomod
-  - git pull  
+  - mkdir -p $SRC/mods 
+  - git clone ssh://git@192.168.1.24:222/go_utils/logger.git $SRC/mods/logger
+  - git clone ssh://git@192.168.1.24:222/go_utils/prom_metrics.git $SRC/mods/prom_metrics
+  - git clone ssh://git@192.168.1.24:222/go_utils/web_sock.git $SRC/mods/web_sock  
+  - git clone ssh://git@192.168.1.24:222/go_utils/utils.git $SRC/mods/utils  
   - cp -r $SRC/fmtp/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
@@ -50,7 +47,7 @@ build:
 deploy:  
   stage: deploy
   only:
-    - develop
+    - redis_log
   script:
   
   - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME"
