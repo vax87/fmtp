@@ -30,14 +30,13 @@ type fmtpGrpcServerImpl struct {
 	sync.Mutex
 
 	msgToFdps    []*pb.Msg
-	clntActivity map[string]time.Time  // ключ - адрес fdps провайдера, значение - время последней активности
+	clntActivity sync.Map              //map[string]time.Time  // ключ - адрес fdps провайдера, значение - время последней активности
 	FromFdpsChan chan pb.MsgWithChanId // канал для приема сообщений от провайдера OLDI
 }
 
 func newFmtpGrpcServerImpl() *fmtpGrpcServerImpl {
 	retValue := fmtpGrpcServerImpl{}
 	retValue.msgToFdps = make([]*pb.Msg, 0)
-	retValue.clntActivity = make(map[string]time.Time)
 	retValue.FromFdpsChan = make(chan pb.MsgWithChanId, 1024)
 	return &retValue
 }
@@ -45,7 +44,7 @@ func newFmtpGrpcServerImpl() *fmtpGrpcServerImpl {
 func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.SvcResult, error) {
 	p, _ := peer.FromContext(ctx)
 	if host, _, err := net.SplitHostPort(p.Addr.String()); err == nil {
-		s.clntActivity[host] = time.Now().UTC()
+		s.clntActivity.Store(host, time.Now().UTC())
 	}
 	var errorString string
 
@@ -72,7 +71,7 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 
 	p, _ := peer.FromContext(ctx)
 	if host, _, err := net.SplitHostPort(p.Addr.String()); err == nil {
-		s.clntActivity[host] = time.Now().UTC()
+		s.clntActivity.Store(host, time.Now().UTC())
 	}
 
 	toSend := make([]*pb.Msg, 0)
@@ -93,11 +92,12 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 func (s *fmtpGrpcServerImpl) getActiveProviders() []string {
 	retValue := make([]string, 0)
 	nowTime := time.Now().UTC()
-	for key, val := range s.clntActivity {
-		if val.Add(providerValidDur).After(nowTime) {
-			retValue = append(retValue, key)
+	s.clntActivity.Range(func(key, value interface{}) bool {
+		if value.(time.Time).Add(providerValidDur).After(nowTime) {
+			retValue = append(retValue, key.(string))
 		}
-	}
+		return true
+	})
 	return retValue
 }
 
