@@ -1,4 +1,4 @@
-FROM ol7-orcl:19.3
+FROM busybox:glibc
 
 LABEL maintainer="LEMZ"
 
