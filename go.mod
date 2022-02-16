@@ -3,10 +3,10 @@ module fmtp
 go 1.17
 
 replace (
-	lemz.com/fdps/logger => H:\source\fdps\OLDI\mods\logger
-	lemz.com/fdps/prom_metrics => H:\source\fdps\OLDI\mods\prom_metrics
-	lemz.com/fdps/utils => H:\source\fdps\OLDI\mods\utils
-	lemz.com/fdps/web_sock => H:\source\fdps\OLDI\mods\web_sock
+	lemz.com/fdps/logger => ../mods/logger
+	lemz.com/fdps/prom_metrics => ../mods/prom_metrics
+	lemz.com/fdps/utils => ../mods/utils
+	lemz.com/fdps/web_sock => ../mods/web_sock
 )
 
 require (
