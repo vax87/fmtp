@@ -3,10 +3,9 @@ package chief_logger
 import (
 	"fmt"
 
-	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/chief_configurator"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
 	"lemz.com/fdps/logger"
 )
 

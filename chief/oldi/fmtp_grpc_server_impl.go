@@ -7,13 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"fdps/fmtp/chief/chief_metrics"
-	"fdps/fmtp/chief/chief_settings"
-	pb "fdps/fmtp/chief/proto/fmtp"
-	"fdps/fmtp/chief_configurator"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/chief/chief_metrics"
+	"fmtp/chief/chief_settings"
+	pb "fmtp/chief/proto/fmtp"
+	"fmtp/chief_configurator"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
 	"lemz.com/fdps/logger"
 
 	"google.golang.org/grpc/codes"

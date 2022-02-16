@@ -7,14 +7,12 @@ import (
 	"os"
 	"strconv"
 
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/channel/fmtp_states"
-	"fdps/fmtp/chief_channel"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/channel/channel_settings"
+	"fmtp/channel/channel_state"
+	"fmtp/channel/fmtp_states"
+	"fmtp/chief_channel"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
-	//"fdps/go_utils/logger"
 	"lemz.com/fdps/logger"
 )
 

@@ -2,13 +2,13 @@ package chief_logger
 
 import (
 	"context"
-	"fdps/fmtp/chief/chief_metrics"
-	"fdps/fmtp/fmtp_log"
 	"fmt"
+	"fmtp/chief/chief_metrics"
+	"fmtp/fmtp_log"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 const (

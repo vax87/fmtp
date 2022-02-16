@@ -6,13 +6,12 @@ import (
 	"net"
 	"time"
 
-	"fdps/fmtp/chief/chief_settings"
-	"fdps/fmtp/chief/chief_state"
-	pb "fdps/fmtp/chief/proto/fmtp"
-	chief_cfg "fdps/fmtp/chief_configurator"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/chief/chief_settings"
+	"fmtp/chief/chief_state"
+	pb "fmtp/chief/proto/fmtp"
+	chief_cfg "fmtp/chief_configurator"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
 	"lemz.com/fdps/logger"
 
 	"google.golang.org/grpc"

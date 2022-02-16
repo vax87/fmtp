@@ -6,16 +6,14 @@ import (
 	"io"
 	"time"
 
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/channel/tcp_transport"
-	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/channel/channel_settings"
+	"fmtp/channel/channel_state"
+	"fmtp/channel/tcp_transport"
+	"fmtp/fmtp"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
 	"lemz.com/fdps/logger"
-
-	"fdps/utils"
+	"lemz.com/fdps/utils"
 )
 
 // контроллер переходов в FMTP состояния

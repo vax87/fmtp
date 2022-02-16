@@ -1,9 +1,10 @@
 package chief_configurator
 
 import (
-	"fdps/fmtp/chief/chief_settings"
-	"fdps/fmtp/chief/chief_state"
-	"fdps/utils"
+	"fmtp/chief/chief_settings"
+	"fmtp/chief/chief_state"
+
+	"lemz.com/fdps/utils"
 )
 
 // от конфигуратора могут быть получены сообщения:

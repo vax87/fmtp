@@ -1,10 +1,10 @@
 package chief_channel
 
 import (
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/channel/channel_settings"
+	"fmtp/channel/channel_state"
+	"fmtp/fmtp"
+	"fmtp/fmtp_log"
 )
 
 // коды завершения приложения канала

@@ -10,15 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"fdps/fmtp/chief/chief_settings"
-	"fdps/fmtp/chief/chief_state"
-	"fdps/fmtp/chief/chief_web"
+	"fmtp/chief/chief_settings"
+	"fmtp/chief/chief_state"
+	"fmtp/chief/chief_web"
 
-	"fdps/fmtp/chief_configurator/configurator_urls"
-	//"fdps/go_utils/logger"
-	"fdps/utils"
+	"fmtp/chief_configurator/configurator_urls"
 
 	"lemz.com/fdps/logger"
+	"lemz.com/fdps/utils"
 )
 
 const dbgChannelVersions = "Версии FMTP каналов"

@@ -3,12 +3,12 @@ package main
 import (
 	"sync"
 
-	"fdps/fmtp/chief/chief_logger"
-	"fdps/fmtp/chief/chief_web"
-	"fdps/fmtp/chief/chief_worker"
-	"fdps/utils"
+	"fmtp/chief/chief_logger"
+	"fmtp/chief/chief_web"
+	"fmtp/chief/chief_worker"
 
 	"lemz.com/fdps/logger"
+	"lemz.com/fdps/utils"
 )
 
 const (

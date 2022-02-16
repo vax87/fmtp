@@ -2,16 +2,15 @@ package chief_channel
 
 import (
 	"encoding/json"
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/channel/channel_state"
+	"fmtp/fmtp_log"
 
-	//"fdps/go_utils/logger"
-	"fdps/go_utils/web_sock"
-	"fdps/utils"
 	"fmt"
 	"time"
 
 	"lemz.com/fdps/logger"
+	"lemz.com/fdps/utils"
+	"lemz.com/fdps/web_sock"
 )
 
 // ClientSettings настройки клиента контроллера каналов

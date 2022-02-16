@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"fdps/fmtp/fmtp"
+	"fmtp/fmtp"
 )
 
 // таймер с возможностью запуска/остановки.

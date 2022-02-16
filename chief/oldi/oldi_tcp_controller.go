@@ -8,15 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_settings"
-	"fdps/fmtp/chief/chief_state"
-	"fdps/fmtp/fmtp_log"
-
-	//"fdps/go_utils/logger"
-	"fdps/utils"
+	"fmtp/channel/channel_settings"
+	"fmtp/chief/chief_settings"
+	"fmtp/chief/chief_state"
+	"fmtp/fmtp_log"
 
 	"lemz.com/fdps/logger"
+	"lemz.com/fdps/utils"
 )
 
 // интервал проверки состояния контроллера

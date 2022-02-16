@@ -3,9 +3,9 @@ package fmtp_states
 import (
 	"time"
 
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/fmtp"
-	"fdps/fmtp/fmtp_log"
+	"fmtp/channel/channel_settings"
+	"fmtp/fmtp"
+	"fmtp/fmtp_log"
 )
 
 // ----------------------------состояния IDLE----------------------------

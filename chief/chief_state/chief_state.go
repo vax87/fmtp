@@ -1,8 +1,8 @@
 package chief_state
 
 import (
-	"fdps/fmtp/channel/channel_state"
-	"fdps/fmtp/chief/chief_settings"
+	"fmtp/channel/channel_state"
+	"fmtp/chief/chief_settings"
 )
 
 const (

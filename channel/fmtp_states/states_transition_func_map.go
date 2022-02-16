@@ -1,8 +1,8 @@
 package fmtp_states
 
 import (
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/fmtp"
+	"fmtp/channel/channel_settings"
+	"fmtp/fmtp"
 )
 
 // функции, выполняемые при переходе в / (выходе из) состояния

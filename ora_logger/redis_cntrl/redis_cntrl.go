@@ -3,14 +3,14 @@ package redis_cntrl
 import (
 	"context"
 	"encoding/json"
-	"fdps/fmtp/fmtp_log"
-	"fdps/fmtp/ora_logger/metrics_cntrl"
 	"fmt"
+	"fmtp/fmtp_log"
+	"fmtp/ora_logger/metrics_cntrl"
 	"sort"
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 type RedisCntrl struct {

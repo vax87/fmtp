@@ -1,17 +1,18 @@
 package chief_worker
 
 import (
-	"fdps/fmtp/channel/channel_settings"
-	"fdps/fmtp/chief/chief_logger"
-	"fdps/fmtp/chief/chief_metrics"
-	"fdps/fmtp/chief/chief_state"
-	"fdps/fmtp/chief/oldi"
-	"fdps/fmtp/chief/tky"
-	"fdps/fmtp/chief/version"
-	"fdps/fmtp/chief_channel"
-	"fdps/fmtp/chief_configurator"
-	"fdps/go_utils/prom_metrics"
+	"fmtp/channel/channel_settings"
+	"fmtp/chief/chief_logger"
+	"fmtp/chief/chief_metrics"
+	"fmtp/chief/chief_state"
+	"fmtp/chief/oldi"
+	"fmtp/chief/tky"
+	"fmtp/chief/version"
+	"fmtp/chief_channel"
+	"fmtp/chief_configurator"
 	"sync"
+
+	"lemz.com/fdps/prom_metrics"
 )
 
 func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.WaitGroup) {

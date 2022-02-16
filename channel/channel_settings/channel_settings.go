@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strconv"
 
-	"fdps/fmtp/fmtp"
+	"fmtp/fmtp"
 )
 
 const (

@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fdps/fmtp/ora_logger/metrics_cntrl"
-	"fdps/fmtp/ora_logger/ora_cntrl"
-	"fdps/fmtp/ora_logger/redis_cntrl"
-	"fdps/go_utils/prom_metrics"
+	"fmtp/ora_logger/metrics_cntrl"
+	"fmtp/ora_logger/ora_cntrl"
+	"fmtp/ora_logger/redis_cntrl"
+
+	"lemz.com/fdps/prom_metrics"
 )
 
 var (

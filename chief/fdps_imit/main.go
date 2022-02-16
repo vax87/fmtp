@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	pb "fdps/fmtp/chief/proto/fmtp"
+	pb "fmtp/chief/proto/fmtp"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	"google.golang.org/grpc"
 
-	prom_metrics "fdps/go_utils/prom_metrics"
+	"lemz.com/fdps/prom_metrics"
 )
 
 const (

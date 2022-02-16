@@ -1,12 +1,13 @@
 package chief_web
 
 import (
-	"fdps/fmtp/chief_configurator/configurator_urls"
-	"fdps/utils"
 	"fmt"
+	"fmtp/chief_configurator/configurator_urls"
 	"log"
 	"net/http"
 	"time"
+
+	"lemz.com/fdps/utils"
 )
 
 type httpServer struct {

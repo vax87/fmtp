@@ -6,8 +6,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	ch_set "fdps/fmtp/channel/channel_settings"
-	"fdps/utils"
+	ch_set "fmtp/channel/channel_settings"
+
+	"lemz.com/fdps/utils"
 )
 
 const (
