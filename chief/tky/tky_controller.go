@@ -3,12 +3,15 @@ package tky
 import (
 	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/chief_configurator"
-	"fdps/go_utils/logger"
+
+	//"fdps/go_utils/logger"
 	"fdps/utils"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
+
+	"lemz.com/fdps/logger"
 )
 
 // TkyController контроллер отвечает за отправкку состояния chief и channel по запросу

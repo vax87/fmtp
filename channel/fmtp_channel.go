@@ -13,7 +13,9 @@ import (
 	"fdps/fmtp/chief_channel"
 	"fdps/fmtp/fmtp_log"
 
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
+	"lemz.com/fdps/logger"
 )
 
 // клиент для связи с контроллером каналов

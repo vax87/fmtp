@@ -1,8 +1,10 @@
 package chief_web
 
 import (
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
 	"fdps/utils"
+
+	"lemz.com/fdps/logger"
 )
 
 type webServerConf struct {

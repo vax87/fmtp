@@ -5,11 +5,13 @@ import (
 	"fdps/fmtp/channel/channel_state"
 	"fdps/fmtp/fmtp_log"
 
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
 	"fdps/utils"
 	"fmt"
 	"time"
+
+	"lemz.com/fdps/logger"
 )
 
 // ClientSettings настройки клиента контроллера каналов

@@ -12,8 +12,11 @@ import (
 	"fdps/fmtp/chief/chief_settings"
 	"fdps/fmtp/chief/chief_state"
 	"fdps/fmtp/fmtp_log"
-	"fdps/go_utils/logger"
+
+	//"fdps/go_utils/logger"
 	"fdps/utils"
+
+	"lemz.com/fdps/logger"
 )
 
 // интервал проверки состояния контроллера

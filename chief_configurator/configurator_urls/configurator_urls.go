@@ -3,8 +3,10 @@ package configurator_urls
 import (
 	"net/url"
 
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
 	"fdps/utils"
+
+	"lemz.com/fdps/logger"
 )
 
 // ConfiguratorUrls URL для взаимодействия конфигуратора.

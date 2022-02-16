@@ -2,8 +2,8 @@ image: go_build:1.15
 
 variables:
   SRC: "/go/src/fdps"
-  CHIEF_RELEASE: "0.0.7"
-  CHANNEL_RELEASE: "0.0.4"
+  CHIEF_RELEASE: "1.0.0"
+  CHANNEL_RELEASE: "1.0.0"
 
 before_script:
   - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
@@ -23,13 +23,17 @@ build:
     - develop
   script: 
   - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/fmtp
-  - git clone ssh://git@192.168.1.24:222/fdps/utils.git $SRC/utils
   - cd  $SRC/fmtp
-  - git checkout develop  
-  - git pull 
+  - git checkout redis_log
+  - git pull  
+  - mkdir -p $SRC/go_utils 
+  - git clone ssh://git@192.168.1.24:222/go_utils/logger.git $SRC/go_utils/logger
+  - git clone ssh://git@192.168.1.24:222/go_utils/prom_metrics.git $SRC/go_utils/prom_metrics
+  - git clone ssh://git@192.168.1.24:222/go_utils/web_sock.git $SRC/go_utils/web_sock  
+  - git clone ssh://git@192.168.1.24:222/fdps/utils.git $SRC/utils  
   - cd  $SRC/utils
-  - git checkout develop  
-  - git pull
+  - git checkout gomod
+  - git pull  
   - cp -r $SRC/fmtp/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs

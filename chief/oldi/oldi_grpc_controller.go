@@ -11,7 +11,9 @@ import (
 	pb "fdps/fmtp/chief/proto/fmtp"
 	chief_cfg "fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp_log"
-	"fdps/go_utils/logger"
+
+	//"fdps/go_utils/logger"
+	"lemz.com/fdps/logger"
 
 	"google.golang.org/grpc"
 )

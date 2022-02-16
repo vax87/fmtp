@@ -5,7 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
+	"lemz.com/fdps/logger"
 )
 
 // SetUserLogFormatForLjack() - свой формат вывода сообщений fmtp в файловый логгер

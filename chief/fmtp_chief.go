@@ -8,7 +8,7 @@ import (
 	"fdps/fmtp/chief/chief_worker"
 	"fdps/utils"
 
-	"fdps/go_utils/logger"
+	"lemz.com/fdps/logger"
 )
 
 const (

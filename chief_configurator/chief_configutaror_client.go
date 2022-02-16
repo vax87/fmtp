@@ -15,8 +15,10 @@ import (
 	"fdps/fmtp/chief/chief_web"
 
 	"fdps/fmtp/chief_configurator/configurator_urls"
-	"fdps/go_utils/logger"
+	//"fdps/go_utils/logger"
 	"fdps/utils"
+
+	"lemz.com/fdps/logger"
 )
 
 const dbgChannelVersions = "Версии FMTP каналов"

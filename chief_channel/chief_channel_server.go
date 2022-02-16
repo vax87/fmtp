@@ -25,9 +25,12 @@ import (
 	"fdps/fmtp/chief_configurator"
 	"fdps/fmtp/fmtp"
 	"fdps/fmtp/fmtp_log"
-	"fdps/go_utils/logger"
+
+	//"fdps/go_utils/logger"
 	"fdps/go_utils/web_sock"
 	"fdps/utils"
+
+	"lemz.com/fdps/logger"
 )
 
 const (
