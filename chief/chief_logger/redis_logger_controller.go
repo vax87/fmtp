@@ -11,32 +11,28 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-const (
-	maxTextLen = 2000
-)
-
 type RedisLogController struct {
-	LogMsgChan         chan fmtp_log.LogMessage
-	SettsChan          chan RedisLoggerSettings
-	msgToSend          []fmtp_log.LogMessage
-	redisClnt          *redis.Client
-	sendToStreamTicker *time.Ticker
-	setts              RedisLoggerSettings
-	successConnect     bool
-	msgMutex           sync.Mutex
+	LogMsgChan     chan fmtp_log.LogMessage
+	SettsChan      chan RedisLoggerSettings
+	msgToSend      []fmtp_log.LogMessage
+	redisClnt      *redis.Client
+	setts          RedisLoggerSettings
+	successConnect bool
+	msgMutex       sync.Mutex
 }
 
 func NewRedisController() *RedisLogController {
 	return &RedisLogController{
-		LogMsgChan:         make(chan fmtp_log.LogMessage, 1024),
-		SettsChan:          make(chan RedisLoggerSettings, 10),
-		msgToSend:          make([]fmtp_log.LogMessage, 0),
-		sendToStreamTicker: time.NewTicker(time.Second),
-		successConnect:     false,
+		LogMsgChan:     make(chan fmtp_log.LogMessage, 1024),
+		SettsChan:      make(chan RedisLoggerSettings, 10),
+		msgToSend:      make([]fmtp_log.LogMessage, 0),
+		successConnect: false,
 	}
 }
 
 func (rc *RedisLogController) Run() {
+	sendToStreamTicker := time.NewTicker(time.Second)
+
 	for {
 		select {
 		case msg := <-rc.LogMsgChan:
@@ -53,10 +49,9 @@ func (rc *RedisLogController) Run() {
 			if rc.setts != setts {
 				rc.setts = setts
 				rc.connectToServer()
-				rc.sendToStreamTicker.Reset(time.Duration(rc.setts.SendIntervalMSec))
 			}
 
-		case <-rc.sendToStreamTicker.C:
+		case <-sendToStreamTicker.C:
 			//fmt.Printf("\tBEGIN rc.sendToStreamTicker.C %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 			countMsg := len(rc.msgToSend)
 			if rc.successConnect && len(rc.msgToSend) > 0 {
@@ -97,28 +92,24 @@ func (rc *RedisLogController) connectToServer() {
 func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error {
 	//fmt.Printf("\t\tBEGIN pushLogsToStream  %d %s\n", len(msgs), time.Now().Format("2006-01-02 15:04:05.000"))
 
-	var values []interface{}
-	values = append(values, "count")
-	values = append(values, len(msgs))
+	pipe := rc.redisClnt.Pipeline()
 
-	for idx, val := range msgs {
-		// проверяем длину текста
-		if len(val.Text) > maxTextLen {
-			val.Text = val.Text[:maxTextLen]
-		}
-
-		values = append(values, fmt.Sprintf("msg%2d", idx))
-		values = append(values, val)
+	for _, val := range msgs {
+		pipe.XAdd(context.Background(),
+			&redis.XAddArgs{
+				Stream: "FmtpLog",
+				MaxLen: rc.setts.StreamMaxCount,
+				Approx: true,
+				ID:     "",
+				Values: []interface{}{"msg", val},
+			})
 	}
-	err := rc.redisClnt.XAdd(context.Background(),
-		&redis.XAddArgs{
-			Stream: "FmtpLog",
-			MaxLen: rc.setts.StreamMaxCount,
-			Approx: true,
-			ID:     "",
-			Values: values,
-		}).Err()
-	if err == nil {
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFunc()
+	_, errPipe := pipe.Exec(ctx)
+
+	if errPipe == nil {
 		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{
 			Keys: 1,
 			Msg:  len(msgs),
@@ -129,5 +120,5 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error
 		}
 	}
 	//fmt.Printf("\t\tEND pushLogsToStream %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
-	return err
+	return errPipe
 }

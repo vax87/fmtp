@@ -10,8 +10,8 @@ import (
 	_ "github.com/godror/godror"
 	"github.com/golang-collections/go-datastructures/queue"
 
-	"fdps/fmtp/fmtp_log"
-	"fdps/fmtp/ora_logger/metrics_cntrl"
+	"fmtp/fmtp_log"
+	"fmtp/ora_logger/metrics_cntrl"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"fdps/fmtp/fmtp_log"
+	"fmtp/fmtp_log"
 )
 
 const (

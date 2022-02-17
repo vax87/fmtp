@@ -62,6 +62,17 @@
                 "GOARC": "386"
             },
             "args": ["34532", "11", "W", "U", "OLDI", "channel", "13111"]
+        },
+        {
+            "name": "ora_logger_x64",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/ora_logger/ora_logger.go",
+            "env": {
+                "GOOS": "windows",
+                "GOARC": "amd64"
+            }
         }
     ]
 }

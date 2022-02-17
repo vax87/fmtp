@@ -1,7 +1,7 @@
 package metrics_cntrl
 
 import (
-	prom_metrics "fdps/go_utils/prom_metrics"
+	prom_metrics "lemz.com/fdps/prom_metrics"
 )
 
 const (

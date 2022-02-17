@@ -8,9 +8,8 @@ type RedisLoggerSettings struct {
 	UserName string `json:"DbUser"`     // пользователь БД
 	Password string `json:"DbPassword"` // пароль для подключения к БД
 
-	StreamMaxCount   int64 `json:"StreamMaxCount"`   // максимальное число логов в потоке
-	SendIntervalMSec int   `json:"SendIntervalMSec"` // интервал отправки в поток (мсек.)
-	MaxSendCount     int   `json:"MaxSendCount"`     // максимальное кол-во логов, отправляемых за один раз
+	StreamMaxCount int64 `json:"StreamMaxCount"` // максимальное число логов в потоке
+	MaxSendCount   int   `json:"MaxSendCount"`   // максимальное кол-во логов, отправляемых за один раз
 }
 
 // сравнение настроек в части настроек БД
