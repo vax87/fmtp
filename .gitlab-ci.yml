@@ -1,9 +1,11 @@
 image: go_build:1.15
 
 variables:
+  APPNAME: "fdps-fmtp"
   SRC: "/go/src/fdps"
   CHIEF_RELEASE: "1.0.0"
   CHANNEL_RELEASE: "1.0.0"
+  ORA_LOGGER_RELEASE: "1.0.0"
 
 before_script:
   - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
@@ -22,8 +24,8 @@ build:
   only:
     - redis_log
   script: 
-  - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/fmtp
-  - cd  $SRC/fmtp
+  - git clone ssh://git@192.168.1.24:222/fdps/fmtp.git $SRC/${APPNAME}
+  - cd  $SRC/${APPNAME}
   - git checkout redis_log
   - git pull  
   - mkdir -p $SRC/mods 
@@ -31,13 +33,15 @@ build:
   - git clone ssh://git@192.168.1.24:222/go_utils/prom_metrics.git $SRC/mods/prom_metrics
   - git clone ssh://git@192.168.1.24:222/go_utils/web_sock.git $SRC/mods/web_sock  
   - git clone ssh://git@192.168.1.24:222/go_utils/utils.git $SRC/mods/utils  
-  - cp -r $SRC/fmtp/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
+  - cp -r $SRC/${APPNAME}/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
-  - cd  $SRC/fmtp/channel
+  - cd  $SRC/${APPNAME}/channel
   - go build  -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps/fmtp_channel
-  - cd  $SRC/fmtp/chief
-  - go build -ldflags "-X fdps/fmtp/chief/version.Release=${CHIEF_RELEASE} -X fdps/fmtp/chief/version.Commit=$(git rev-parse --short HEAD) -X fdps/fmtp/chief/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/fmtp_chief
+  - cd  $SRC/${APPNAME}/ora_logger
+  - go build  -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/ora_logger/fdps/ora_logger
+  - cd  $SRC/${APPNAME}/chief
+  - go build -ldflags "-X fdps/${APPNAME}/chief/version.Release=${CHIEF_RELEASE} -X fdps/${APPNAME}/chief/version.Commit=$(git rev-parse --short HEAD) -X fdps/${APPNAME}/chief/version.BuildTime=`date +%Y-%m-%dT%H:%M:%S`" -o $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/fmtp_chief
 
         
   artifacts:
@@ -50,11 +54,13 @@ deploy:
     - redis_log
   script:
   
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME"
-  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/* sasha@192.168.1.24:/home/sasha/docker/$CI_PROJECT_NAME
-  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/channel && docker build -t fmtp_channel:${CHANNEL_RELEASE} . --no-cache"
-  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker-compose down" 
-  - ssh sasha@192.168.1.24 "cd ~/docker/$CI_PROJECT_NAME/chief && docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/channel/image_tars && cd ~/docker/$CI_PROJECT_NAME/channel/image_tars && docker save -o fmtp_channel-${CHANNEL_RELEASE}.tar fmtp_channel:${CHANNEL_RELEASE}"  
-  - ssh sasha@192.168.1.24 "mkdir -p ~/docker/$CI_PROJECT_NAME/chief/image_tars && cd ~/docker/$CI_PROJECT_NAME/chief/image_tars && docker save -o fmtp_chief-${CHIEF_RELEASE}.tar fmtp_chief:${CHIEF_RELEASE}"
+  - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/$APPNAME && cd /home/cicd/docker/$APPNAME"
+  - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/* deploy_user@192.168.1.24:/home/cicd/docker/$APPNAME
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/channel && docker build -t fmtp_channel:${CHANNEL_RELEASE} . --no-cache"
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/ora_logger && docker build -t fmtp_ora_logger:${ORA_LOGGER_RELEASE} . --no-cache"
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker-compose down" 
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
+  - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/channel/image_tars && cd /home/cicd/docker/${APPNAME}/channel/image_tars && docker save -o fmtp_channel-${CHANNEL_RELEASE}.tar fmtp_channel:${CHANNEL_RELEASE}"
+  - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/ora_logger/image_tars && cd /home/cicd/docker/${APPNAME}/ora_logger/image_tars && docker save -o fmtp_ora_logger-${ORA_LOGGER_RELEASE}.tar fmtp_ora_logger:${ORA_LOGGER_RELEASE}"
+  - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/chief/image_tars && cd /home/cicd/docker/${APPNAME}/chief/image_tars && docker save -o fmtp_chief-${CHIEF_RELEASE}.tar fmtp_chief:${CHIEF_RELEASE}"
   

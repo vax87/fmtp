@@ -10,6 +10,7 @@ import (
 
 	pb "fmtp/chief/proto/fmtp"
 
+	"google.golang.org/grpc/credentials/insecure"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	"google.golang.org/grpc"
@@ -18,7 +19,7 @@ import (
 )
 
 const (
-	address      = ":55566"
+	address      = "192.168.1.24:55566"
 	sendInterval = 300 * time.Millisecond
 	recvInterval = 300 * time.Millisecond
 )
@@ -35,7 +36,7 @@ const (
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("did not connect: %v", err)
 	}
@@ -47,7 +48,7 @@ func main() {
 	recvTicker := time.NewTicker(recvInterval)
 	var msgId int64
 
-	testTicker := time.NewTicker(50 * time.Millisecond)
+	testTicker := time.NewTicker(10 * time.Millisecond)
 	msgs := pb.MsgList{}
 
 	var expectBuffer []*pb.Msg

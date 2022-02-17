@@ -1,13 +1,11 @@
 version: '2'
 
 services:
-  fmtp-chief:
-   image: fmtp_chief:1.0.0
-   container_name: fmtp_chief
+  fmtp-ora-logger:
+   image: fmtp_ora_logger:1.0.0
+   container_name: fmtp_ora_logger
    network_mode: "host"
-   volumes:
-    - ./fdps/config:/fdps/config
-    - ./fdps/logs:/fdps/logs
+   volumes:    
     - /var/run/docker.sock:/var/run/docker.sock
    restart: always
    mem_limit: 256M
