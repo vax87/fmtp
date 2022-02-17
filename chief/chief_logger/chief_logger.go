@@ -12,15 +12,15 @@ import (
 // ChiefLogger логгер, записывающий сообщения в БД
 type ChiefLogger struct {
 	SettsChangedChan chan struct{}
-	redisLogCntrl    *RedisLogController
-	minSeverity      logger.Severity
+	//redisLogCntrl    *RedisLogController
+	minSeverity logger.Severity
 }
 
 func NewChiefLogger() *ChiefLogger {
 	return &ChiefLogger{
 		SettsChangedChan: make(chan struct{}, 1),
-		redisLogCntrl:    NewRedisController(),
-		minSeverity:      logger.SevInfo,
+		//redisLogCntrl:    NewRedisController(),
+		minSeverity: logger.SevInfo,
 	}
 }
 
@@ -33,23 +33,23 @@ func (cl *ChiefLogger) Work() {
 	// свой формат вывода логов на web страницу
 	fmtp_log.SetUserLogFormatForWeb()
 
-	go cl.redisLogCntrl.Run()
+	//go cl.redisLogCntrl.Run()
 
 	for {
 		select {
 
 		case <-cl.SettsChangedChan:
-			cl.redisLogCntrl.SettsChan <- RedisLoggerSettings{
-				Hostname: "192.168.1.24",
-				Port:     6389,
-				DbId:     0,
-				UserName: "",
-				Password: "",
+			// cl.redisLogCntrl.SettsChan <- RedisLoggerSettings{
+			// 	Hostname: "192.168.1.24",
+			// 	Port:     6389,
+			// 	DbId:     0,
+			// 	UserName: "",
+			// 	Password: "",
 
-				StreamMaxCount:   10000,
-				SendIntervalMSec: 20,
-				MaxSendCount:     50,
-			}
+			// 	StreamMaxCount:   10000,
+			// 	SendIntervalMSec: 20,
+			// 	MaxSendCount:     50,
+			// }
 		}
 	}
 }
@@ -67,7 +67,7 @@ func (cl *ChiefLogger) processNewLogMsg(sev logger.Severity, fmtpSev string, for
 			fmtpLogMsg = fmtp_log.LogCntrlSDT(fmtpSev, fmtp_log.DirectionUnknown, fmt.Sprintf(format, a...))
 		}
 		fmtpLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
-		cl.redisLogCntrl.LogMsgChan <- fmtpLogMsg
+		//cl.redisLogCntrl.LogMsgChan <- fmtpLogMsg
 	}
 }
 
