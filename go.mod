@@ -18,7 +18,7 @@ require (
 	google.golang.org/grpc v1.44.0
 	google.golang.org/protobuf v1.27.1
 	lemz.com/fdps/logger v1.0.2
-	lemz.com/fdps/prom_metrics v1.0.1
+	lemz.com/fdps/prom_metrics v1.0.2
 	lemz.com/fdps/utils v1.0.0
 	lemz.com/fdps/web_sock v1.0.1
 )

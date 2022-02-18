@@ -1,6 +1,8 @@
 package metrics_cntrl
 
 import (
+	"fmtp/ora_logger/logger_state"
+
 	prom_metrics "lemz.com/fdps/prom_metrics"
 )
 
@@ -37,6 +39,14 @@ func NewMetricsCntrl() *MetricsCntrl {
 
 func (c *MetricsCntrl) Run() {
 
+	checkErrFunc := func() {
+		if err := prom_metrics.GetPushError(); err == nil {
+			logger_state.SetMetricsState(logger_state.StateOk, "")
+		} else {
+			logger_state.SetMetricsState(logger_state.StateError, err.Error())
+		}
+	}
+
 	for {
 		select {
 
@@ -49,9 +59,11 @@ func (c *MetricsCntrl) Run() {
 
 		case rdMt := <-c.RedisMetricsChan:
 			prom_metrics.AddToCollector(metricRedisMsg, rdMt.Msg)
+			checkErrFunc()
 
 		case oraMt := <-c.OraMetricsChan:
 			prom_metrics.AddToCounterVec(metricOraQueries, oraMt.Count, oraMt.Labels)
+			checkErrFunc()
 		}
 	}
 }

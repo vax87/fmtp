@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"fmtp/fmtp_log"
+	"fmtp/ora_logger/logger_state"
 	"fmtp/ora_logger/metrics_cntrl"
 	"time"
 
@@ -82,8 +83,10 @@ func (c *RedisCntrl) connectToServer() {
 	c.successConnect = err == nil
 	if err != nil {
 		logger.PrintfErr("Ошибка подключения к Redis серверу: %v", err)
+		logger_state.SetRedisState(logger_state.StateError, err.Error())
 	} else {
 		logger.PrintfDebug("Успешное подключение к Redis серверу")
+		logger_state.SetRedisState(logger_state.StateOk, "")
 	}
 }
 

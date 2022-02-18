@@ -11,6 +11,7 @@ import (
 	"lemz.com/fdps/logger"
 
 	"fmtp/fmtp_log"
+	"fmtp/ora_logger/logger_state"
 	"fmtp/ora_logger/metrics_cntrl"
 )
 
@@ -143,8 +144,10 @@ func (c *OraCntrlr) Run() {
 					}
 					if err := c.connectToDb(); err != nil {
 						logger.PrintfErr("Ошибка подключения к БД Oracle: %v\n", err)
+						logger_state.SetOraState(logger_state.StateError, err.Error())
 					} else {
 						logger.PrintfDebug("Успешное подключение к БД Oracle")
+						logger_state.SetOraState(logger_state.StateOk, "")
 					}
 				}
 				if !isStorEqual {
@@ -170,6 +173,7 @@ func (c *OraCntrlr) Run() {
 				if strings.Contains(execErr.Error(), "database is closed") ||
 					strings.Contains(execErr.Error(), "server is not accepting clients") {
 					c.disconnectFromDb()
+					logger_state.SetOraState(logger_state.StateError, execErr.Error())
 				} else {
 					c.canExecute = true
 				}
