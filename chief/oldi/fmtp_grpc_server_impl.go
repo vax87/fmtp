@@ -10,7 +10,7 @@ import (
 	"fmtp/chief/chief_metrics"
 	"fmtp/chief/chief_settings"
 	pb "fmtp/chief/proto/fmtp"
-	"fmtp/chief_configurator"
+	"fmtp/configurator"
 	"fmtp/fmtp_log"
 
 	"lemz.com/fdps/logger"
@@ -52,7 +52,7 @@ func (s *fmtpGrpcServerImpl) SendMsg(ctx context.Context, msg *pb.MsgList) (*pb.
 	metric := chief_metrics.ProvMetrics{RecvCount: len(msg.List)}
 
 	for _, val := range msg.List {
-		chId := chief_configurator.ChiefCfg.GetChannelIdByCid(val.Cid)
+		chId := configurator.ChiefCfg.GetChannelIdByCid(val.Cid)
 		if chId != -1 {
 			s.FromFdpsChan <- pb.MsgWithChanId{PbMsg: val, ChanId: chId}
 		} else {

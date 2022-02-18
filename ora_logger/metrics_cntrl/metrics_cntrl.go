@@ -11,8 +11,7 @@ const (
 )
 
 type RedisMetrics struct {
-	Keys int
-	Msg  int
+	Msg int
 }
 
 const OraTypeLabel = "tp"
@@ -49,7 +48,6 @@ func (c *MetricsCntrl) Run() {
 			prom_metrics.Initialize()
 
 		case rdMt := <-c.RedisMetricsChan:
-			prom_metrics.AddToCollector(metricRedisKeys, rdMt.Keys)
 			prom_metrics.AddToCollector(metricRedisMsg, rdMt.Msg)
 
 		case oraMt := <-c.OraMetricsChan:

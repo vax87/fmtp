@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"fmtp/fmtp_log"
 	"fmtp/ora_logger/metrics_cntrl"
-	"sort"
-	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"lemz.com/fdps/logger"
+)
+
+const (
+	streamName = "FmtpLog"
+	msgKey     = "msg"
 )
 
 type RedisCntrl struct {
@@ -38,6 +42,8 @@ func NewRedisController() *RedisCntrl {
 }
 
 func (c *RedisCntrl) Run() {
+	c.MetricsChan <- metrics_cntrl.RedisMetrics{Msg: 0}
+
 	for {
 		select {
 
@@ -50,14 +56,14 @@ func (c *RedisCntrl) Run() {
 		case <-c.RequestMsgChan:
 			if len(c.prevReadIds) > 0 {
 				if err := c.delLogsFromStream(); err != nil {
-					fmt.Printf("Error DEL from stream %v", err)
+					logger.PrintfErr("Ошибка удаления из потока Redis %v", err)
 				} else {
 					c.prevReadIds = c.prevReadIds[:0]
 				}
 			}
 
 			if msgs, err := c.readLogsFromStream(); err != nil {
-				fmt.Printf("Error READ from stream %v", err)
+				logger.PrintfErr("Ошибка чтения из потока Redis %v", err)
 			} else {
 				if len(msgs) > 0 {
 					c.SendMsgChan <- msgs
@@ -75,7 +81,9 @@ func (c *RedisCntrl) connectToServer() {
 	_, err := c.redisClnt.Ping(context.Background()).Result()
 	c.successConnect = err == nil
 	if err != nil {
-		fmt.Printf("Ошибка подключения к Redis серверу: %v", err)
+		logger.PrintfErr("Ошибка подключения к Redis серверу: %v", err)
+	} else {
+		logger.PrintfDebug("Успешное подключение к Redis серверу")
 	}
 }
 
@@ -86,45 +94,23 @@ func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 		defer cancelFunc()
 		readSlice := c.redisClnt.XRead(ctx,
 			&redis.XReadArgs{
-				Streams: []string{"FmtpLog", "0"},
-				Count:   10,
+				Streams: []string{streamName, "0"},
+				Count:   int64(c.setts.MaxReadCount),
 				Block:   0,
 			})
 
-		//fmt.Printf("Stream %s", readSlice.String())
 		var readCnt metrics_cntrl.RedisMetrics
 
 		for _, xStreamVal := range readSlice.Val() {
-			//fmt.Printf("Stream %s", xStreamVal.Stream)
-
-			readCnt.Keys += len(xStreamVal.Messages)
 			for _, msgVal := range xStreamVal.Messages {
-				//	fmt.Printf("\tMsg id %s\n", msgVal.ID)
 				c.prevReadIds = append(c.prevReadIds, msgVal.ID)
-
-				msgKeys := make([]string, 0)
-				for key, _ := range msgVal.Values {
-					msgKeys = append(msgKeys, key)
-				}
-				countMsg, ok := msgVal.Values["count"]
-				if ok {
-					if val, err := strconv.Atoi(countMsg.(string)); err == nil {
-						readCnt.Msg += val
-					}
-				}
-				sort.Strings(msgKeys)
-
-				//readCnt.Keys += len(msgKeys)
-
-				for _, key := range msgKeys {
-					if msgString, ok := msgVal.Values[key].(string); ok {
+				msg, msgOk := msgVal.Values[msgKey]
+				if msgOk {
+					if msgString, ok := msg.(string); ok {
 						var logMsg fmtp_log.LogMessage
 						if err := json.Unmarshal([]byte(msgString), &logMsg); err == nil {
 							retMsg = append(retMsg, logMsg)
-							//fmt.Printf("\t\tMsg key %v value %v\n", key, logMsg)
 						}
-					} else {
-						fmt.Printf("\t\t--Msg key %v value %v\n", key, msgVal.Values[key])
 					}
 				}
 			}
@@ -138,7 +124,7 @@ func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 func (c *RedisCntrl) delLogsFromStream() error {
 	if c.successConnect {
 		return c.redisClnt.XDel(context.Background(),
-			"FmtpLog",
+			streamName,
 			c.prevReadIds...).Err()
 	}
 	return fmt.Errorf("Нет подключения к Redis")

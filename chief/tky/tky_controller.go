@@ -2,7 +2,7 @@ package tky
 
 import (
 	"fmtp/chief/chief_state"
-	"fmtp/chief_configurator"
+	"fmtp/configurator"
 
 	"fmt"
 	"net/http"
@@ -30,7 +30,7 @@ func genTkyState() StateForTky {
 				LocalName:   val.LocalName,
 				RemoteName:  val.RemoteName,
 				DaemonState: val.DaemonState,
-				DaemonType:  chief_configurator.ChiefCfg.ChannelDataTypeById(val.ChannelID),
+				DaemonType:  configurator.ChiefCfg.ChannelDataTypeById(val.ChannelID),
 				FmtpState:   val.FmtpState,
 			})
 	}
@@ -42,7 +42,7 @@ func genTkyState() StateForTky {
 				ProviderType:         val.ProviderType,
 				ProviderIPs:          val.ProviderIPs,
 				ProviderState:        val.ProviderState,
-				ProviderStatus:       chief_configurator.ChiefCfg.ProviderStatusById(val.ProviderID),
+				ProviderStatus:       configurator.ChiefCfg.ProviderStatusById(val.ProviderID),
 				ProviderErrorMessage: val.ProviderErrorMessage,
 			})
 	}

@@ -2,14 +2,13 @@ package oldi
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
 
 	"fmtp/chief/chief_settings"
 	"fmtp/chief/chief_state"
 	pb "fmtp/chief/proto/fmtp"
-	chief_cfg "fmtp/chief_configurator"
+	chief_cfg "fmtp/configurator"
 	"fmtp/fmtp_log"
 
 	"lemz.com/fdps/logger"
@@ -49,14 +48,14 @@ func NewOldiGrpcController() *OldiGrpcController {
 func (c *OldiGrpcController) startGrpcServer() {
 	lis, err := net.Listen("tcp4", c.grpcAddress)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		logger.PrintfErr("Ошибка запуска TCP сервера GRPC: %v", err)
 	}
 	c.grpcServer = grpc.NewServer()
 	pb.RegisterFmtpServiceServer(c.grpcServer, c.fmtpServer)
 	c.grpsServed = true
 	if err := c.grpcServer.Serve(lis); err != nil {
 		c.grpsServed = false
-		log.Fatalf("failed to serve: %v", err)
+		logger.PrintfErr("Ошибка запуска GRPC сервера: %v", err)
 	}
 }
 

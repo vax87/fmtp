@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"sync"
 
-	"fmtp/chief_configurator/configurator_urls"
+	"fmtp/configurator/configurator_urls"
 
 	logger "lemz.com/fdps/logger"
 )

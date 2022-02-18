@@ -18,7 +18,6 @@ type LoggerState struct {
 	LoggerConnected   string `json:"LoggerConnected"`   // признак наличия подключения контроллера к логгеру
 	LoggerDbConnected string `json:"LoggerDbConnected"` // признак подключения логгера к БД
 	LoggerDbError     string `json:"LoggerDbError"`     // текст ошибки при работе с БД
-	LoggerVersion     string `json:"LoggerVersion"`     // версия логгера
 }
 
 type ProviderState struct {
@@ -39,18 +38,12 @@ type ChiefState struct {
 	CommonErrorMessage string                       `json:"CommonErrorMessage"`
 	ControllerVersion  string                       `json:"ControllerVersion"`
 	DockerVersion      string                       `json:"DockerVersion"`  // версия docker-engine
-	LoggerState        LoggerState                  `json:"LoggerState"`    // состояние логгера
 	ChannelStates      []channel_state.ChannelState `json:"DaemonStates"`   // состояние FMTP каналов
 	ProviderStates     []ProviderState              `json:"ProviderStates"` // состояние провайдеров
 }
 
 func SetDockerVersion(dockerVers string) {
 	CommonChiefState.DockerVersion = dockerVers
-}
-
-func SetLoggerState(loggerState LoggerState) {
-	CommonChiefState.LoggerState = loggerState
-	checkCommonState()
 }
 
 func SetAodbProviderState(aodbState []ProviderState) {
@@ -89,12 +82,6 @@ func SetChannelsState(channelsState []channel_state.ChannelState) {
 
 func checkCommonState() {
 	CommonChiefState.CommonState = StateOk
-
-	if CommonChiefState.LoggerState.LoggerConnected != StateOk ||
-		CommonChiefState.LoggerState.LoggerDbConnected != StateOk {
-		CommonChiefState.CommonState = StateError
-		return
-	}
 
 	for _, it := range CommonChiefState.ChannelStates {
 		if it.DaemonState != channel_state.ChannelStateOk {

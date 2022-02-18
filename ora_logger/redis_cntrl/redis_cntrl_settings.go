@@ -10,7 +10,7 @@ type RedisCntrlSettings struct {
 
 	StreamMaxCount   int64 `json:"StreamMaxCount"`   // максимальное число логов в потоке
 	SendIntervalMSec int   `json:"SendIntervalMSec"` // интервал отправки в поток (мсек.)
-	MaxSendCount     int   `json:"MaxSendCount"`     // максимальное кол-во логов, отправляемых за один раз
+	MaxReadCount     int   `json:"MaxReadCount"`     // максимальное кол-во логов, считываемых за один раз
 }
 
 // сравнение настроек в части настроек БД

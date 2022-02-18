@@ -2,7 +2,7 @@ package chief_web
 
 import (
 	"fmt"
-	"fmtp/chief_configurator/configurator_urls"
+	"fmtp/configurator/configurator_urls"
 	"log"
 	"net/http"
 	"time"

@@ -5,8 +5,9 @@ services:
    image: fmtp_ora_logger:1.0.0
    container_name: fmtp_ora_logger
    network_mode: "host"
-   volumes:    
-    - /var/run/docker.sock:/var/run/docker.sock
+   volumes:
+    - ./fdps/config:/fdps/config
+    - ./fdps/logs:/fdps/logs
    restart: always
    mem_limit: 256M
    cpu_quota: 100000

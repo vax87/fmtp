@@ -2,13 +2,13 @@ package ora_cntrl
 
 import (
 	"database/sql"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
 	_ "github.com/godror/godror"
 	"github.com/golang-collections/go-datastructures/queue"
+	"lemz.com/fdps/logger"
 
 	"fmtp/fmtp_log"
 	"fmtp/ora_logger/metrics_cntrl"
@@ -142,9 +142,9 @@ func (c *OraCntrlr) Run() {
 						c.disconnectFromDb()
 					}
 					if err := c.connectToDb(); err != nil {
-						log.Printf("Fail connect to DB: %v\n", err)
+						logger.PrintfErr("Ошибка подключения к БД Oracle: %v\n", err)
 					} else {
-						log.Println("Success connect to DB")
+						logger.PrintfDebug("Успешное подключение к БД Oracle")
 					}
 				}
 				if !isStorEqual {
@@ -179,7 +179,9 @@ func (c *OraCntrlr) Run() {
 			c.checkQueryQueue()
 
 		case <-c.pingDbTicker.C:
-			c.checkHeatrbeat()
+			if c.dbSuccess {
+				c.checkHeatrbeat()
+			}
 
 		case <-c.logLifetimeTicker.C:
 			c.checkLogLivetime()
@@ -242,7 +244,9 @@ func (c *OraCntrlr) checkLogLivetime() {
 
 func (c *OraCntrlr) checkHeatrbeat() {
 	if c.queryQueue.Empty() {
-		c.RequestMsgChan <- struct{}{}
+		if len(c.logMsgBuffer) == 0 {
+			c.RequestMsgChan <- struct{}{}
+		}
 
 		c.queryQueue.Put(queueItem{
 			queryText: oraHeartbeatQuery(),
@@ -300,7 +304,7 @@ func (c *OraCntrlr) executeQuery() {
 		case queueIt := <-c.execQueryChan:
 			_, curErr := c.db.Exec(queueIt.queryText)
 			if curErr != nil {
-				log.Printf("!!! EXEC err %s\n\n", curErr.Error())
+				logger.PrintfDebug("!!! EXEC err %s\n\n", curErr.Error())
 				c.MetricsChan <- metrics_cntrl.OraMetrics{
 					Count:  queueIt.countMsg,
 					Labels: map[string]string{metrics_cntrl.OraTypeLabel: errMetricLabel},

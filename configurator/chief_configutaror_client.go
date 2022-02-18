@@ -1,20 +1,14 @@
-package chief_configurator
+package configurator
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"reflect"
-	"strings"
 	"time"
 
 	"fmtp/chief/chief_settings"
 	"fmtp/chief/chief_state"
 	"fmtp/chief/chief_web"
-
-	"fmtp/chief_configurator/configurator_urls"
 
 	"lemz.com/fdps/logger"
 	"lemz.com/fdps/utils"
@@ -28,40 +22,28 @@ var ChiefCfg chief_settings.ChiefSettings = chief_settings.ChiefSettings{CntrlID
 // ChannelImageName имя docker образа приложения FMTP канал
 const ChannelImageName = "fmtp_channel"
 
-type httpResult struct {
-	result json.RawMessage
-	err    error
-}
-
 // клиент контроллера для подключения к конфигуратору
 type ChiefConfiguratorClient struct {
-	configUrls           configurator_urls.ConfiguratorUrls
-	ChiefSettChangedChan chan struct{}
-
-	postResultChan chan httpResult
-
+	ConfiguratorClient
+	ChiefSettChangedChan   chan struct{}
 	readLocalSettingsTimer *time.Timer
-
-	withDocker bool
-
-	channelVersions []string // список версий приложений/docker бразов FMTP канала
-
-	sendHeartbeatTicker *time.Ticker
+	sendHeartbeatTicker    *time.Ticker
+	withDocker             bool
+	channelVersions        []string // список версий приложений/docker бразов FMTP канала
 }
 
 func NewChiefClient(workWithDocker bool) *ChiefConfiguratorClient {
 	return &ChiefConfiguratorClient{
+		ConfiguratorClient:     ConfiguratorClient{postResultChan: make(chan httpResult, 1)},
 		ChiefSettChangedChan:   make(chan struct{}, 1),
-		postResultChan:         make(chan httpResult, 1),
 		readLocalSettingsTimer: time.NewTimer(time.Minute),
-		withDocker:             workWithDocker,
 		sendHeartbeatTicker:    time.NewTicker(time.Second),
+		withDocker:             workWithDocker,
 	}
 }
 
-func (cc *ChiefConfiguratorClient) Work() {
-
-	if cc.withDocker {
+func (c *ChiefConfiguratorClient) Work() {
+	if c.withDocker {
 		// останавливаем и удаляем ранее запущенные контейнеры fmtp каналов
 		if stopErr := utils.StopContainers(ChannelImageName); stopErr != nil {
 			logger.PrintfErr("Ошибка остановки docker контейнеров приложения FMTP канал. Ошибка: %s.", stopErr.Error())
@@ -72,15 +54,15 @@ func (cc *ChiefConfiguratorClient) Work() {
 		select {
 
 		// результат выполнения POST запроса
-		case postRes := <-cc.postResultChan:
+		case postRes := <-c.postResultChan:
 			if postRes.err == nil {
-				var msgHeader MessageHeader
+				var msgHeader ChiefHdr
 				if unmErr := json.Unmarshal(postRes.result, &msgHeader); unmErr != nil {
 					logger.PrintfErr("Ошибка разбора (unmarshall) сообщения от конфигуратора. Сообщение: %s. Ошибка: %s.", string(postRes.result), unmErr.Error())
 				} else {
 					switch msgHeader.Header {
 					// ответ на запрос настроек
-					case AnswerSettingsHeader:
+					case ChiefSettsAnswerHdr:
 						ChiefCfg = chief_settings.ChiefSettings{CntrlID: -1, IPAddr: "", IsInitialised: false}
 						if unmErr = json.Unmarshal(postRes.result, &ChiefCfg); unmErr != nil {
 							logger.PrintfErr("Ошибка разбора (unmarshall) ответа на запрос настроек. Сообщение: %s. Ошибка: %s.", string(postRes.result), unmErr.Error())
@@ -88,25 +70,25 @@ func (cc *ChiefConfiguratorClient) Work() {
 							ChiefCfg.IsInitialised = true
 							logger.PrintfDebug("Получены настройки от конфигуратора. %+v.", ChiefCfg)
 
-							cc.readLocalSettingsTimer.Stop()
+							c.readLocalSettingsTimer.Stop()
 
 							ChiefCfg.SaveToFile()
 
-							cc.initAfterGetSettings()
+							c.initAfterGetSettings()
 
 							// отправляем настройки
-							cc.sendSettings()
+							c.sendSettings()
 						}
 
 					// ответ на сообщение о состоянии контроллера
-					case HeartbeatAnswerHeader:
-						var curMsg HeartbeatAnswerMsg
+					case ChiefHbtAnswerHdr:
+						var curMsg ChiefHbtAnswerMsg
 						if unmErr := json.Unmarshal(postRes.result, &curMsg); unmErr != nil {
 							logger.PrintfErr("Ошибка разбора (unmarshall) ответа на сообщение о состоянии контроллера. Сообщение: %s. Ошибка: %s.",
 								string(postRes.result), unmErr.Error())
 						} else {
 							if curMsg.ConfigTimestamp != ChiefCfg.Timestamp {
-								go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
+								go c.postToConfigurator(c.configUrls.SettingsURLStr, CreateChiefSettsRequestMsg(c.channelVersions))
 							}
 						}
 
@@ -118,76 +100,45 @@ func (cc *ChiefConfiguratorClient) Work() {
 				logger.PrintfErr("%v", postRes.err)
 				ChiefCfg.IsInitialised = false
 				time.AfterFunc(time.Minute, func() {
-					go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
+					go c.postToConfigurator(c.configUrls.SettingsURLStr, CreateChiefSettsRequestMsg(c.channelVersions))
 				})
 			}
 
 		// сработал таймер отправки состояния (heartbeat)
-		case <-cc.sendHeartbeatTicker.C:
+		case <-c.sendHeartbeatTicker.C:
 			if ChiefCfg.IsInitialised {
-				go cc.postToConfigurator(cc.configUrls.HeartbeatURLStr,
-					HeartbeatMsg{
-						MessageHeader: MessageHeader{Header: HeartbeatHeader},
-						ChiefState:    chief_state.CommonChiefState,
+				go c.postToConfigurator(c.configUrls.HeartbeatURLStr,
+					ChiefHbtMsg{
+						ChiefHdr:   ChiefHdr{Header: ChiefHbtHdr},
+						ChiefState: chief_state.CommonChiefState,
 					})
 			}
 
 		// сработал таймер считывания настроек из файла
-		case <-cc.readLocalSettingsTimer.C:
+		case <-c.readLocalSettingsTimer.C:
 			if fileErr := ChiefCfg.ReadFromFile(); fileErr != nil {
 				logger.PrintfErr("Ошибка чтения настроек контроллера из файла. Ошибка: %s.", fileErr.Error())
 			} else {
-				logger.PrintfErr("Настройки контроллера считаны из файла.")
+				logger.PrintfWarn("Настройки контроллера считаны из файла.")
 				// отправляем настройки
-				cc.sendSettings()
+				c.sendSettings()
 			}
 
 		// получены настроки URL из web
-		case cc.configUrls = <-chief_web.UrlConfigChan:
-			cc.configUrls.SaveToFile()
+		case c.configUrls = <-chief_web.UrlConfigChan:
+			c.setUrls()
 		}
 	}
 }
 
 // Start запуск взаимодействия с конфигуратором
-func (cc *ChiefConfiguratorClient) Start() {
-	cc.configUrls.ReadFromFile()
-	chief_web.SetUrlConfig(cc.configUrls)
+func (c *ChiefConfiguratorClient) Start() {
+	c.getUrls()
+	chief_web.SetUrlConfig(c.configUrls)
 
-	cc.initBeforeGetSettings()
+	c.initBeforeGetSettings()
 	logger.PrintfDebug("Собственные IP адреса: %v", utils.GetLocalIpv4List())
-	go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
-}
-
-// отправка POST сообщения конфигуратору и возврат ответа
-func (cc *ChiefConfiguratorClient) postToConfigurator(url string, msg interface{}) {
-	jsonValue, _ := json.Marshal(msg)
-	//logger.PrintfWarn("POST: %s", string(jsonValue))
-	resp, postErr := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
-	if postErr == nil {
-		defer resp.Body.Close()
-		if strings.Contains(resp.Status, "200") {
-			if body, readErr := ioutil.ReadAll(resp.Body); readErr == nil {
-				if bytes.Contains(body, []byte("error")) { //пишем в логи только ошибки
-
-					cc.postResultChan <- httpResult{err: fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))}
-				}
-				if ind := strings.Index(string(body), "{"); ind >= 0 {
-					cc.postResultChan <- httpResult{result: body[ind:], err: nil}
-				} else {
-					cc.postResultChan <- httpResult{err: fmt.Errorf("Не валидное тело http пакета. Тело пакета: %s", string(body))}
-				}
-			} else {
-				cc.postResultChan <- httpResult{err: fmt.Errorf("Ошибка чтения ответа http запроса. Тело пакета: %s. Ошибка: %s", string(body), readErr.Error())}
-			}
-		} else {
-			cc.postResultChan <- httpResult{err: fmt.Errorf("HTPP запрос выполнен с ошибкой. Запрос: %s. URL: %s. Статус ответа: %s",
-				jsonValue, url, resp.Status)}
-		}
-	} else {
-		cc.postResultChan <- httpResult{err: fmt.Errorf("Ошибка выполнения HTPP запроса. Запрос: %s. URL: %s. Ошибка: %s",
-			jsonValue, url, postErr.Error())}
-	}
+	go c.postToConfigurator(c.configUrls.SettingsURLStr, CreateChiefSettsRequestMsg(c.channelVersions))
 }
 
 // инициализация после получений настроек
@@ -237,7 +188,7 @@ func (cc *ChiefConfiguratorClient) initAfterGetSettings() {
 			// если появились новые версии, заново запрашиваем настройки
 			if !reflect.DeepEqual(cc.channelVersions, newVersions) {
 				cc.channelVersions = newVersions
-				go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateSettingsRequestMsg(cc.channelVersions))
+				go cc.postToConfigurator(cc.configUrls.SettingsURLStr, CreateChiefSettsRequestMsg(cc.channelVersions))
 			}
 		}
 	}

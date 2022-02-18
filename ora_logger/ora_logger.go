@@ -1,11 +1,20 @@
 package main
 
 import (
+	cfg "fmtp/configurator"
+
 	"fmtp/ora_logger/metrics_cntrl"
 	"fmtp/ora_logger/ora_cntrl"
 	"fmtp/ora_logger/redis_cntrl"
 
+	"lemz.com/fdps/logger"
 	"lemz.com/fdps/prom_metrics"
+	"lemz.com/fdps/utils"
+)
+
+const (
+	appName    = "fdps-ora-logger"
+	appVersion = "2022-02-18 15:49"
 )
 
 var (
@@ -15,47 +24,54 @@ var (
 )
 
 func main() {
+	logger.InitLoggerSettings(utils.AppPath()+"/config/loggers.json", appName, appVersion)
+	if logger.LogSettInst.NeedWebLog {
+		utils.AppendHandler(logger.WebLogger)
+	}
+
+	loggerConfClient := cfg.NewLoggerClient()
+
 	go metricsCntrl.Run()
 	go oraCntrl.Run()
 	go redisCntrl.Run()
 
-	//!!! только один раз можно вызвать
-	metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
-		PusherIntervalSec: 1,
-		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
-		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
-		GatewayJob:       "fmtp",
-		CollectNamespace: "fmtp",
-		CollectSubsystem: "logger",
-		CollectLabels:    map[string]string{"host": "192.168.10.219"},
-	}
-	//!!!
-
-	oraCntrl.SettsChan <- ora_cntrl.OraCntrlSettings{
-		Hostname:         "192.168.1.30",
-		Port:             1521,
-		ServiceName:      "metplan",
-		UserName:         "fmtp_log",
-		Password:         "log",
-		LogStoreMaxCount: 2400000,
-		LogStoreDays:     30,
-	}
-
-	redisCntrl.SettsChan <- redis_cntrl.RedisCntrlSettings{
-		Hostname: "192.168.1.24", // from lemz
-		//Hostname: "127.0.0.1", // from home
-		Port:     6389,
-		DbId:     0,
-		UserName: "",
-		Password: "",
-
-		StreamMaxCount:   1000,
-		SendIntervalMSec: 20,
-		MaxSendCount:     50,
-	}
+	go loggerConfClient.Work()
+	go loggerConfClient.Start()
 
 	for {
 		select {
+
+		case <-loggerConfClient.LoggerSettChangedChan:
+
+			metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
+				PusherIntervalSec: cfg.LoggerCfg.MetricsIntervalSec,
+				GatewayUrl:        cfg.LoggerCfg.MetricsGatewayUrl,
+				GatewayJob:        "fmtp",
+				CollectNamespace:  "fmtp",
+				CollectSubsystem:  "logger",
+				CollectLabels:     map[string]string{"host": cfg.LoggerCfg.IPAddr},
+			}
+
+			oraCntrl.SettsChan <- ora_cntrl.OraCntrlSettings{
+				Hostname:         cfg.LoggerCfg.OraHostname,
+				Port:             cfg.LoggerCfg.OraPort,
+				ServiceName:      cfg.LoggerCfg.OraServiceName,
+				UserName:         cfg.LoggerCfg.OraUser,
+				Password:         cfg.LoggerCfg.OraPassword,
+				LogStoreMaxCount: cfg.LoggerCfg.OraMaxLogStoreCount,
+				LogStoreDays:     cfg.LoggerCfg.OraStoreDays,
+			}
+
+			redisCntrl.SettsChan <- redis_cntrl.RedisCntrlSettings{
+				Hostname: cfg.LoggerCfg.RedisHostname,
+				Port:     cfg.LoggerCfg.RedisPort,
+				DbId:     cfg.LoggerCfg.RedisDbId,
+				UserName: cfg.LoggerCfg.RedisUserName,
+				Password: cfg.LoggerCfg.RedisPassword,
+
+				StreamMaxCount: cfg.LoggerCfg.RedisStreamMaxCount,
+			}
+
 		case <-oraCntrl.RequestMsgChan:
 			redisCntrl.RequestMsgChan <- struct{}{}
 
@@ -69,20 +85,4 @@ func main() {
 			metricsCntrl.OraMetricsChan <- oraMt
 		}
 	}
-
-	// time.Sleep(time.Second)
-
-	// go func() {
-	// 	for idx := 0; idx < 10; idx++ {
-	// 		redisCntrl.OraRequestMsgChan <- struct{}{}
-	// 		time.Sleep(time.Second)
-	// 	}
-	// }()
-
-	// var wg sync.WaitGroup
-	// wg.Add(1)
-	// // for {
-	// // 	select {}
-	// // }
-	// wg.Wait()
 }

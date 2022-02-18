@@ -22,7 +22,7 @@ import (
 	"fmtp/chief/chief_settings"
 	"fmtp/chief/chief_state"
 	pb "fmtp/chief/proto/fmtp"
-	"fmtp/chief_configurator"
+	"fmtp/configurator"
 	"fmtp/fmtp"
 	"fmtp/fmtp_log"
 
@@ -495,10 +495,10 @@ func (cc *ChiefChannelServer) startChannelContainer(chSett channel_settings.Chan
 	curContainerName := "fmtp_channel_" + chSett.LocalATC + "_" + chSett.RemoteATC + "_" + strconv.Itoa(chSett.Id)
 	var imageName string
 
-	if len(chief_configurator.ChiefCfg.DockerRegistry) != 0 {
-		imageName = chief_configurator.ChiefCfg.DockerRegistry + "/"
+	if len(configurator.ChiefCfg.DockerRegistry) != 0 {
+		imageName = configurator.ChiefCfg.DockerRegistry + "/"
 	}
-	imageName += chief_configurator.ChannelImageName + ":" + chSett.Version
+	imageName += configurator.ChannelImageName + ":" + chSett.Version
 
 	resp, crErr := cli.ContainerCreate(ctx,
 		&container.Config{

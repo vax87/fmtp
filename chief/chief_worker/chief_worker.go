@@ -9,7 +9,7 @@ import (
 	"fmtp/chief/tky"
 	"fmtp/chief/version"
 	"fmtp/chief_channel"
-	"fmtp/chief_configurator"
+	"fmtp/configurator"
 	"sync"
 
 	"lemz.com/fdps/prom_metrics"
@@ -18,7 +18,7 @@ import (
 func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.WaitGroup) {
 
 	// клиент для связи с конфигуратором
-	var chiefConfClient *chief_configurator.ChiefConfiguratorClient
+	var chiefConfClient *configurator.ChiefConfiguratorClient
 
 	// grpc сервер для подключения OLDI провайдеров
 	var oldiGrpcCntrl = oldi.NewOldiGrpcController()
@@ -26,7 +26,7 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 	// контроллер FMTP каналов
 	var channelCntrl = chief_channel.NewChiefChannelServer(done, withDocker)
 
-	chiefConfClient = chief_configurator.NewChiefClient(withDocker)
+	chiefConfClient = configurator.NewChiefClient(withDocker)
 
 	go chiefConfClient.Work()
 	// отправляем запрос настроек контроллера
@@ -61,8 +61,8 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 		// настройки контроллера изменены
 		case <-chiefConfClient.ChiefSettChangedChan:
 			channelCntrl.ChannelSettsChan <- channel_settings.ChannelSettingsWithPort{
-				ChSettings: chief_configurator.ChiefCfg.ChannelSetts,
-				ChPort:     chief_configurator.ChiefCfg.ChannelsPort,
+				ChSettings: configurator.ChiefCfg.ChannelSetts,
+				ChPort:     configurator.ChiefCfg.ChannelsPort,
 			}
 
 			oldiGrpcCntrl.SettsChangedChan <- struct{}{}

@@ -3,7 +3,7 @@ package chief_logger
 import (
 	"fmt"
 
-	"fmtp/chief_configurator"
+	"fmtp/configurator"
 	"fmtp/fmtp_log"
 
 	"lemz.com/fdps/logger"
@@ -65,7 +65,7 @@ func (cl *ChiefLogger) processNewLogMsg(sev logger.Severity, fmtpSev string, for
 		} else {
 			fmtpLogMsg = fmtp_log.LogCntrlSDT(fmtpSev, fmtp_log.DirectionUnknown, fmt.Sprintf(format, a...))
 		}
-		fmtpLogMsg.ControllerIP = chief_configurator.ChiefCfg.IPAddr
+		fmtpLogMsg.ControllerIP = configurator.ChiefCfg.IPAddr
 		cl.redisLogCntrl.LogMsgChan <- fmtpLogMsg
 	}
 }

@@ -1,0 +1,21 @@
+{
+	"IsInitialised": false,
+	"LoggerIP": "127.0.0.1",
+	"LoggerID": "-1",
+	"LoggerConfigTimestamp": "",
+	"OraHostname": "192.168.1.30",
+	"OraPort": 1521,
+	"OraServiceName": "metplan",
+	"OraUser": "fmtp_log",
+	"OraPassword": "log",
+	"OraMaxLogStoreCount": 1000000,
+	"OraStoreDays": 30,
+	"RedisHostname": "192.168.1.24",
+	"RedisPort": 6389,
+	"RedisId": 0,
+	"RedisUser": "",
+	"RedisPassword": "",
+	"RedisStreamMaxCount": 10000,
+	"MetricsIntervalSec": 1,
+	"MetricsGatewayUrl": "http://192.168.1.24:9100"
+}
