@@ -56,11 +56,12 @@ deploy:
   script:
   
   - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/$APPNAME && cd /home/cicd/docker/$APPNAME"
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker-compose down"
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/ora_logger  && docker-compose down"
   - scp -r $CI_PROJECT_DIR/$CI_PROJECT_NAME/* deploy_user@192.168.1.24:/home/cicd/docker/$APPNAME
   - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/channel && docker build -t fmtp_channel:${CHANNEL_RELEASE} . --no-cache"
-  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/ora_logger && docker build -t fmtp_ora_logger:${ORA_LOGGER_RELEASE} . --no-cache"
-  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker-compose down" 
-  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
+  - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/ora_logger && docker build -t fmtp_ora_logger:${ORA_LOGGER_RELEASE} . --no-cache && docker-compose up -d"
+   - ssh deploy_user@192.168.1.24 "cd /home/cicd/docker/$APPNAME/chief && docker build -t fmtp_chief:${CHIEF_RELEASE} . --no-cache && docker-compose up -d"  
   - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/channel/image_tars && cd /home/cicd/docker/${APPNAME}/channel/image_tars && docker save -o fmtp_channel-${CHANNEL_RELEASE}.tar fmtp_channel:${CHANNEL_RELEASE}"
   - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/ora_logger/image_tars && cd /home/cicd/docker/${APPNAME}/ora_logger/image_tars && docker save -o fmtp_ora_logger-${ORA_LOGGER_RELEASE}.tar fmtp_ora_logger:${ORA_LOGGER_RELEASE}"
   - ssh deploy_user@192.168.1.24 "mkdir -p /home/cicd/docker/${APPNAME}/chief/image_tars && cd /home/cicd/docker/${APPNAME}/chief/image_tars && docker save -o fmtp_chief-${CHIEF_RELEASE}.tar fmtp_chief:${CHIEF_RELEASE}"
