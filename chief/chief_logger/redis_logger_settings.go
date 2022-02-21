@@ -2,14 +2,14 @@ package chief_logger
 
 // RedisLoggerSettings - настройки контроллера отправки логов в БД Redis
 type RedisLoggerSettings struct {
-	Hostname string `json:"DbHostname"` // адрес/название хоста
-	Port     int    `json:"DbPort"`     // порт подключения к БД
-	DbId     int    `json:"DbId"`       // идентификатор БД
-	UserName string `json:"DbUser"`     // пользователь БД
-	Password string `json:"DbPassword"` // пароль для подключения к БД
+	Hostname string `json:"RedisHostname"` // адрес/название хоста
+	Port     int    `json:"RediPort"`      // порт подключения к БД
+	DbId     int    `json:"RedisDbId"`     // идентификатор БД
+	UserName string `json:"RedisUser"`     // пользователь БД
+	Password string `json:"RedisPassword"` // пароль для подключения к БД
 
-	StreamMaxCount int64 `json:"StreamMaxCount"` // максимальное число логов в потоке
-	MaxSendCount   int   `json:"MaxSendCount"`   // максимальное кол-во логов, отправляемых за один раз
+	StreamMaxCount int64 `json:"RedisStreamMaxCount"` // максимальное число логов в потоке
+	MaxSendCount   int   `json:"RedisMaxSendCount"`   // максимальное кол-во логов, отправляемых за один раз
 }
 
 // сравнение настроек в части настроек БД

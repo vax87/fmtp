@@ -1,4 +1,4 @@
-image: go_build:1.15
+image: go_build:1.17-grpc
 
 variables:
   APPNAME: "fdps-fmtp"
@@ -34,7 +34,10 @@ build:
   - git clone ssh://git@192.168.1.24:222/go_utils/prom_metrics.git $SRC/mods/prom_metrics
   - git clone ssh://git@192.168.1.24:222/go_utils/web_sock.git $SRC/mods/web_sock  
   - git clone ssh://git@192.168.1.24:222/go_utils/utils.git $SRC/mods/utils  
-  - cp -r $SRC/${APPNAME}/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME
+  - git clone ssh://git@192.168.1.24:222/fdps/proto.git $SRC/proto  
+  - cp -r $SRC/${APPNAME}/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME  
+  - cd $SRC/proto/fmtp
+  - protoc --go_out=../../fmtp/chief --go-grpc_out=require_unimplemented_servers=false:../../fmtp/chief ./fmtp.proto  
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
   - cd  $SRC/${APPNAME}/channel

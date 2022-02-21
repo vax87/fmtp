@@ -1,0 +1,10 @@
+{
+    "RedisHostname": "192.168.1.24",
+    "RediPort": 6389,
+    "RedisDbId": 0,
+    "RedisUser": "",
+    "RedisPassword": "",
+    "RedisStreamMaxCount": 100000,
+    "RedisMaxSendCount": 100
+}
+

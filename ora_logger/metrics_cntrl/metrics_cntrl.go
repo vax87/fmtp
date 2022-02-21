@@ -7,9 +7,11 @@ import (
 )
 
 const (
-	metricRedisKeys  = "redis_read_keys"
-	metricRedisMsg   = "redis_read_msg"
-	metricOraQueries = "ora_exec_queries"
+	metricRedisKeys       = "redis_read_keys"
+	metricRedisMsg        = "redis_read_msg"
+	metricOraQueries      = "ora_exec_queries"
+	metricOraMsgBuffer    = "ora_msg_buffer"
+	metricOraQueriesQueue = "ora_queries_queue"
 )
 
 type RedisMetrics struct {
@@ -19,8 +21,10 @@ type RedisMetrics struct {
 const OraTypeLabel = "tp"
 
 type OraMetrics struct {
-	Count  int
-	Labels map[string]string
+	Count        int
+	Labels       map[string]string
+	MsgBuffer    int
+	QueriesQueue int
 }
 
 type MetricsCntrl struct {
@@ -55,6 +59,8 @@ func (c *MetricsCntrl) Run() {
 			prom_metrics.AppendCounter(metricRedisKeys, "Кол-во считанных ключей из потока Redis")
 			prom_metrics.AppendCounter(metricRedisMsg, "Кол-во считанных сообщений журнала из потока Redis")
 			prom_metrics.AppendCounterVec(metricOraQueries, "Кол-во выполненных запросов к Oracle", []string{OraTypeLabel})
+			prom_metrics.AppendGauge(metricOraMsgBuffer, "Размер буфера сообщений журнала контроллера Oracle")
+			prom_metrics.AppendGauge(metricOraQueriesQueue, "Размер очереди запросов контроллера Oracle")
 			prom_metrics.Initialize()
 
 		case rdMt := <-c.RedisMetricsChan:
@@ -63,6 +69,8 @@ func (c *MetricsCntrl) Run() {
 
 		case oraMt := <-c.OraMetricsChan:
 			prom_metrics.AddToCounterVec(metricOraQueries, oraMt.Count, oraMt.Labels)
+			prom_metrics.SetToGauge(metricOraMsgBuffer, oraMt.MsgBuffer)
+			prom_metrics.SetToGauge(metricOraQueriesQueue, oraMt.QueriesQueue)
 			checkErrFunc()
 		}
 	}

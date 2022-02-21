@@ -7,6 +7,7 @@ import (
 	"fmtp/fmtp_log"
 
 	"lemz.com/fdps/logger"
+	"lemz.com/fdps/utils"
 )
 
 // ChiefLogger логгер, записывающий сообщения в БД
@@ -39,16 +40,26 @@ func (cl *ChiefLogger) Work() {
 		select {
 
 		case <-cl.SettsChangedChan:
-			cl.redisLogCntrl.SettsChan <- RedisLoggerSettings{
-				Hostname: "192.168.1.24",
-				Port:     6389,
-				DbId:     0,
-				UserName: "",
-				Password: "",
+			////////////////////////////////////////////////////////
+			tempConfFilePath := utils.AppPath() + "/config/temp_redis_settings.json"
+			var tempRedisSetts RedisLoggerSettings
 
-				StreamMaxCount: 10000,
-				MaxSendCount:   1000,
+			if errRead := utils.ReadFromFile(tempConfFilePath, &tempRedisSetts); errRead != nil {
+				logger.PrintfErr("Ошибка чтения файла конфигураций Redis. Ошибка: %v.", errRead)
+				tempRedisSetts = RedisLoggerSettings{
+					Hostname: "192.168.1.24",
+					Port:     6389,
+					DbId:     0,
+					UserName: "",
+					Password: "",
+
+					StreamMaxCount: 100000,
+					MaxSendCount:   1000,
+				}
 			}
+
+			cl.redisLogCntrl.SettsChan <- tempRedisSetts
+			/////////////////////////////////////////////////////////
 		}
 	}
 }

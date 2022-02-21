@@ -310,13 +310,17 @@ func (c *OraCntrlr) executeQuery() {
 			if curErr != nil {
 				logger.PrintfDebug("!!! EXEC err %s\n\n", curErr.Error())
 				c.MetricsChan <- metrics_cntrl.OraMetrics{
-					Count:  queueIt.countMsg,
-					Labels: map[string]string{metrics_cntrl.OraTypeLabel: errMetricLabel},
+					Count:        queueIt.countMsg,
+					Labels:       map[string]string{metrics_cntrl.OraTypeLabel: errMetricLabel},
+					MsgBuffer:    len(c.logMsgBuffer),
+					QueriesQueue: c.queryQueue.Len(),
 				}
 			} else {
 				c.MetricsChan <- metrics_cntrl.OraMetrics{
-					Count:  queueIt.countMsg,
-					Labels: map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(queueIt.priority)},
+					Count:        queueIt.countMsg,
+					Labels:       map[string]string{metrics_cntrl.OraTypeLabel: PriorToString(queueIt.priority)},
+					MsgBuffer:    len(c.logMsgBuffer),
+					QueriesQueue: c.queryQueue.Len(),
 				}
 			}
 			c.execResultChan <- curErr
