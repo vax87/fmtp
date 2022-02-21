@@ -37,7 +37,7 @@ build:
   - git clone ssh://git@192.168.1.24:222/fdps/proto.git $SRC/proto  
   - cp -r $SRC/${APPNAME}/docker/* $CI_PROJECT_DIR/$CI_PROJECT_NAME  
   - cd $SRC/proto/fmtp
-  - protoc --go_out=${APPNAME}/chief --go-grpc_out=require_unimplemented_servers=false:${APPNAME}/chief ./fmtp.proto  
+  - protoc --go_out=$SRC/${APPNAME}/chief --go-grpc_out=require_unimplemented_servers=false:$SRC/${APPNAME}/chief ./fmtp.proto  
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/channel/fdps
   - mkdir -p $CI_PROJECT_DIR/$CI_PROJECT_NAME/chief/fdps/logs
   - cd  $SRC/${APPNAME}/channel
