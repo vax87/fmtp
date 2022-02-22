@@ -43,18 +43,6 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 	var metricsCntrl = chief_metrics.NewChiefMetricsCntrl()
 	go metricsCntrl.Run()
 
-	//!!! только один раз можно вызвать
-	metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
-		PusherIntervalSec: 1,
-		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
-		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
-		GatewayJob:       "fmtp",
-		CollectNamespace: "fmtp",
-		CollectSubsystem: "controller",
-		CollectLabels:    map[string]string{"host": "192.168.10.219"},
-	}
-	//!!!
-
 	for {
 		select {
 
@@ -68,6 +56,16 @@ func Start(withDocker bool, dockerVersion string, done chan struct{}, wg *sync.W
 			oldiGrpcCntrl.SettsChangedChan <- struct{}{}
 
 			chief_logger.ChiefLog.SettsChangedChan <- struct{}{}
+
+			metricsCntrl.SettsChan <- prom_metrics.PusherSettings{
+				PusherIntervalSec: 1,
+				GatewayUrl:        "http://192.168.1.24:9100", // from lemz
+				//GatewayUrl:       "http://127.0.0.1:9100",	// from home
+				GatewayJob:       "fmtp",
+				CollectNamespace: "fmtp",
+				CollectSubsystem: "controller",
+				CollectLabels:    map[string]string{"host": configurator.ChiefCfg.IPAddr},
+			}
 
 		// получены данные от провайдера OLDI
 		case fdpsData := <-oldiGrpcCntrl.FromFdpsChan:

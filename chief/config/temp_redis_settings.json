@@ -5,6 +5,6 @@
     "RedisUser": "",
     "RedisPassword": "",
     "RedisStreamMaxCount": 100000,
-    "RedisMaxSendCount": 100
+    "RedisMaxSendCount": 1000
 }
 

@@ -2,6 +2,9 @@ package fmtp_log
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -56,8 +59,49 @@ type LogMessage struct {
 	DateTime       string `json:"DateTime"`     // дата и время сообщения.
 }
 
-func (lm LogMessage) MarshalBinary() ([]byte, error) {
+func (lm *LogMessage) MarshalToString() string {
+	fields := []string{lm.ControllerIP,
+		lm.Source,
+		strconv.Itoa(lm.ChannelId),
+		lm.ChannelLocName,
+		lm.ChannelRemName,
+		lm.DataType,
+		lm.Severity,
+		lm.FmtpType,
+		lm.Direction,
+		lm.Text,
+		lm.DateTime,
+	}
+	return strings.Join(fields, ",")
+}
+
+func UnmarshalFromString(dt string) (LogMessage, error) {
+	var msg LogMessage
+	fields := strings.Split(dt, ",")
+	if len(fields) == 11 {
+		msg.ControllerIP = fields[0]
+		msg.Source = fields[1]
+		msg.ChannelId, _ = strconv.Atoi(fields[2])
+		msg.ChannelLocName = fields[3]
+		msg.ChannelRemName = fields[4]
+		msg.DataType = fields[5]
+		msg.Severity = fields[6]
+		msg.FmtpType = fields[7]
+		msg.Direction = fields[8]
+		msg.Text = fields[9]
+		msg.DateTime = fields[10]
+	} else {
+		return msg, fmt.Errorf("не верное кол-во элементов")
+	}
+	return msg, nil
+}
+
+func (lm LogMessage) MarshalBinaryJson() ([]byte, error) {
 	return json.Marshal(lm)
+}
+
+func (lm LogMessage) UnmarshalBinaryJson(dt []byte, val interface{}) error {
+	return json.Unmarshal(dt, val)
 }
 
 // сообщение журнала с цветом

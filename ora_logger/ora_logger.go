@@ -69,7 +69,7 @@ func main() {
 				UserName: cfg.LoggerCfg.RedisUserName,
 				Password: cfg.LoggerCfg.RedisPassword,
 
-				StreamMaxCount: cfg.LoggerCfg.RedisStreamMaxCount,
+				MaxReadCount: cfg.LoggerCfg.RedisMaxReadCount,
 			}
 
 		case <-oraCntrl.RequestMsgChan:

@@ -30,7 +30,7 @@ type LoggerSettings struct {
 	RedisUserName string `json:"RedisUser"`
 	RedisPassword string `json:"RedisPassword"`
 
-	RedisStreamMaxCount int64 `json:"RedisStreamMaxCount"`
+	RedisMaxReadCount int `json:"RedisMaxReadCount"`
 
 	MetricsIntervalSec int    `json:"MetricsIntervalSec"`
 	MetricsGatewayUrl  string `json:"MetricsGatewayUrl"`
@@ -84,7 +84,7 @@ func (s *LoggerSettings) setDefault() {
 	s.RedisUserName = ""
 	s.RedisPassword = ""
 
-	s.RedisStreamMaxCount = 10000
+	s.RedisMaxReadCount = 100
 
 	s.MetricsIntervalSec = 1
 	s.MetricsGatewayUrl = "http://192.168.1.24:9100"

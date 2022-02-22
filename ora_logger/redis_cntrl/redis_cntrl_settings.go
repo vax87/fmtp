@@ -8,9 +8,7 @@ type RedisCntrlSettings struct {
 	UserName string `json:"DbUser"`     // пользователь БД
 	Password string `json:"DbPassword"` // пароль для подключения к БД
 
-	StreamMaxCount   int64 `json:"StreamMaxCount"`   // максимальное число логов в потоке
-	SendIntervalMSec int   `json:"SendIntervalMSec"` // интервал отправки в поток (мсек.)
-	MaxReadCount     int   `json:"MaxReadCount"`     // максимальное кол-во логов, считываемых за один раз
+	MaxReadCount int `json:"MaxReadCount"` // максимальное кол-во логов, считываемых за один раз
 }
 
 // сравнение настроек в части настроек БД

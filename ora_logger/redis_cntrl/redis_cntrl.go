@@ -2,7 +2,6 @@ package redis_cntrl
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"fmtp/fmtp_log"
 	"fmtp/ora_logger/logger_state"
@@ -110,8 +109,9 @@ func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 				msg, msgOk := msgVal.Values[msgKey]
 				if msgOk {
 					if msgString, ok := msg.(string); ok {
-						var logMsg fmtp_log.LogMessage
-						if err := json.Unmarshal([]byte(msgString), &logMsg); err == nil {
+						//var logMsg fmtp_log.LogMessage
+						//if err := json.Unmarshal([]byte(msgString), &logMsg); err == nil {
+						if logMsg, err := fmtp_log.UnmarshalFromString(msgString); err == nil {
 							retMsg = append(retMsg, logMsg)
 						}
 					}

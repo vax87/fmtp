@@ -101,7 +101,7 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error
 				MaxLen: rc.setts.StreamMaxCount,
 				Approx: true,
 				ID:     "",
-				Values: []interface{}{"msg", val},
+				Values: []interface{}{"msg", val.MarshalToString()},
 			})
 	}
 
