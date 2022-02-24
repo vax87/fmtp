@@ -14,14 +14,12 @@ const (
 
 const RedisTypeLabel = "tp"
 
-const RedisTpKey = "key"
 const RedisTpMsg = "msg"
 const RedisTpErr = "err"
 
 type RedisMetrics struct {
-	Keys int
-	Msg  int
-	Err  int
+	Msg int
+	Err int
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -100,9 +98,12 @@ func (c *ChiefMetricsCntrl) Run() {
 			prom_metrics.AddToCounterVec(metricFdps, prMt.TimeoutCount, map[string]string{ProvTypeLabel: ProvTpTimeout})
 
 		case rdMt := <-RedisMetricsChan:
-			prom_metrics.AddToCounterVec(metricRedis, rdMt.Keys, map[string]string{RedisTypeLabel: RedisTpKey})
-			prom_metrics.AddToCounterVec(metricRedis, rdMt.Msg, map[string]string{RedisTypeLabel: RedisTpMsg})
-			prom_metrics.AddToCounterVec(metricRedis, rdMt.Err, map[string]string{RedisTypeLabel: RedisTpErr})
+			if rdMt.Msg > 0 {
+				prom_metrics.AddToCounterVec(metricRedis, rdMt.Msg, map[string]string{RedisTypeLabel: RedisTpMsg})
+			}
+			if rdMt.Err > 0 {
+				prom_metrics.AddToCounterVec(metricRedis, rdMt.Err, map[string]string{RedisTypeLabel: RedisTpErr})
+			}
 		}
 	}
 }

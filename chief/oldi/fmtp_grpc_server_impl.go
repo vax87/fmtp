@@ -86,6 +86,10 @@ func (s *fmtpGrpcServerImpl) RecvMsq(ctx context.Context, msg *pb.SvcReq) (*pb.M
 		s.msgToFdps = s.msgToFdps[:0]
 	}
 	chief_metrics.ProvMetricsChan <- chief_metrics.ProvMetrics{SendCount: len(toSend)}
+	for _, val := range toSend {
+		logger.PrintfInfo("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityInfo, chief_settings.OLDIProvider,
+			fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", val.Txt)))
+	}
 	return &pb.MsgList{List: toSend}, status.New(codes.OK, "").Err()
 }
 
@@ -116,8 +120,15 @@ func (s *fmtpGrpcServerImpl) cleanOldMsg() {
 	maxIdx := -1
 
 	for idx, val := range s.msgToFdps {
-		if val.Rrtime.AsTime().Add(msgValidDur).Before(time.Now().UTC()) {
+		if val.Rrtime.AsTime().UTC().Add(msgValidDur).Before(time.Now().UTC()) {
 			maxIdx = idx
+
+			logger.PrintfErr("now time %s\ntime grpc %s\ntime grpc TO UTC %s\ntime grpc TO UTC + 30 %s\n",
+				time.Now().UTC().Format("2006-01-02 15:04:05"),
+				val.Rrtime.AsTime().Format("2006-01-02 15:04:05"),
+				val.Rrtime.AsTime().UTC().Format("2006-01-02 15:04:05"),
+				val.Rrtime.AsTime().UTC().Add(msgValidDur).Format("2006-01-02 15:04:05"))
+
 			logger.PrintfWarn("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityWarning, chief_settings.OLDIProvider,
 				fmt.Sprintf("Сообщение удалено из очереди на отправку провайдеру по истечении 30 сек.: %s", val.Txt)))
 		} else {

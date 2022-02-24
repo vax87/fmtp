@@ -101,16 +101,12 @@ func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 				Block:   0,
 			})
 
-		var readCnt metrics_cntrl.RedisMetrics
-
 		for _, xStreamVal := range readSlice.Val() {
 			for _, msgVal := range xStreamVal.Messages {
 				c.prevReadIds = append(c.prevReadIds, msgVal.ID)
 				msg, msgOk := msgVal.Values[msgKey]
 				if msgOk {
 					if msgString, ok := msg.(string); ok {
-						//var logMsg fmtp_log.LogMessage
-						//if err := json.Unmarshal([]byte(msgString), &logMsg); err == nil {
 						if logMsg, err := fmtp_log.UnmarshalFromString(msgString); err == nil {
 							retMsg = append(retMsg, logMsg)
 						}
@@ -118,7 +114,7 @@ func (c *RedisCntrl) readLogsFromStream() ([]fmtp_log.LogMessage, error) {
 				}
 			}
 		}
-		c.MetricsChan <- readCnt
+		c.MetricsChan <- metrics_cntrl.RedisMetrics{Msg: len(retMsg)}
 		return retMsg, readSlice.Err()
 	}
 	return retMsg, fmt.Errorf("Нет подключения к Redis")

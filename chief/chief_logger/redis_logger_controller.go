@@ -36,7 +36,6 @@ func (rc *RedisLogController) Run() {
 	for {
 		select {
 		case msg := <-rc.LogMsgChan:
-			//fmt.Printf("<-rc.LogMsgChan %d %s\n", len(rc.msgToSend), time.Now().Format("2006-01-02 15:04:05.000"))
 			if len(rc.msgToSend) < 10000 {
 				rc.msgMutex.Lock()
 				rc.msgToSend = append(rc.msgToSend, msg)
@@ -52,7 +51,6 @@ func (rc *RedisLogController) Run() {
 			}
 
 		case <-sendToStreamTicker.C:
-			//fmt.Printf("\tBEGIN rc.sendToStreamTicker.C %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 			countMsg := len(rc.msgToSend)
 			if rc.successConnect && len(rc.msgToSend) > 0 {
 				rc.msgMutex.Lock()
@@ -72,7 +70,6 @@ func (rc *RedisLogController) Run() {
 
 				rc.msgMutex.Unlock()
 			}
-			//fmt.Printf("\tEND rc.sendToStreamTicker.C %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 		}
 	}
 }
@@ -90,8 +87,6 @@ func (rc *RedisLogController) connectToServer() {
 }
 
 func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error {
-	//fmt.Printf("\t\tBEGIN pushLogsToStream  %d %s\n", len(msgs), time.Now().Format("2006-01-02 15:04:05.000"))
-
 	pipe := rc.redisClnt.Pipeline()
 
 	for _, val := range msgs {
@@ -110,15 +105,9 @@ func (rc *RedisLogController) pushLogsToStream(msgs []fmtp_log.LogMessage) error
 	_, errPipe := pipe.Exec(ctx)
 
 	if errPipe == nil {
-		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{
-			Keys: 1,
-			Msg:  len(msgs),
-		}
+		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{Msg: len(msgs)}
 	} else {
-		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{
-			Err: 1,
-		}
+		chief_metrics.RedisMetricsChan <- chief_metrics.RedisMetrics{Err: 1}
 	}
-	//fmt.Printf("\t\tEND pushLogsToStream %s\n", time.Now().Format("2006-01-02 15:04:05.000"))
 	return errPipe
 }

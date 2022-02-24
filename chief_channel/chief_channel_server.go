@@ -276,8 +276,6 @@ func (cc *ChiefChannelServer) Work() {
 							if cc.oldiIdent > 1000 {
 								cc.oldiIdent = 1
 							}
-							logger.PrintfInfo("FMTP FORMAT %#v", fmtp_log.LogCntrlSDT(fmtp_log.SeverityInfo, chief_settings.OLDIProvider,
-								fmt.Sprintf("Плановой подсистеме отправлено сообщение: %s.", dataMsg.Text)))
 							cc.ToFdpsPacketChan <- &oldiPkg
 
 							chief_metrics.ChanMetricsChan <- chief_metrics.ChanMetrics{

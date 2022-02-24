@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	address      = "192.168.1.24:55566"
+	address = "192.168.1.24:55566"
+	//address      = "192.168.10.219:55566"
 	sendInterval = 300 * time.Millisecond
 	recvInterval = 300 * time.Millisecond
 )

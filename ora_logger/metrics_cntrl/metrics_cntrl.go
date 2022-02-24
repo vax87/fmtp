@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	metricRedisKeys       = "redis_read_keys"
 	metricRedisMsg        = "redis_read_msg"
 	metricOraQueries      = "ora_exec_queries"
 	metricOraMsgBuffer    = "ora_msg_buffer"
@@ -56,7 +55,6 @@ func (c *MetricsCntrl) Run() {
 
 		case setts := <-c.SettsChan:
 			prom_metrics.SetSettings(setts)
-			prom_metrics.AppendCounter(metricRedisKeys, "Кол-во считанных ключей из потока Redis")
 			prom_metrics.AppendCounter(metricRedisMsg, "Кол-во считанных сообщений журнала из потока Redis")
 			prom_metrics.AppendCounterVec(metricOraQueries, "Кол-во выполненных запросов к Oracle", []string{OraTypeLabel})
 			prom_metrics.AppendGauge(metricOraMsgBuffer, "Размер буфера сообщений журнала контроллера Oracle")
