@@ -3,26 +3,26 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"time"
 
 	pb "fmtp/chief/proto/fmtp"
+	"fmtp/fdps_imit/settings"
 
 	"google.golang.org/grpc/credentials/insecure"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
 	"google.golang.org/grpc"
 
+	"lemz.com/fdps/logger"
 	"lemz.com/fdps/prom_metrics"
+	"lemz.com/fdps/utils"
 )
 
 const (
-	address = "192.168.1.24:55566"
-	//address      = "192.168.10.219:55566"
-	sendInterval = 300 * time.Millisecond
-	recvInterval = 300 * time.Millisecond
+	appName    = "fdps-oldi-imit"
+	appVersion = "2022-02-24 15:49"
 )
 
 const (
@@ -36,36 +36,44 @@ const (
 )
 
 func main() {
+
+	logger.InitLoggerSettings(utils.AppPath()+"/config/loggers.json", appName, appVersion)
+	if logger.LogSettInst.NeedWebLog {
+		utils.AppendHandler(logger.WebLogger)
+	}
+
+	var setts settings.Settings
+	setts.ReadFromFile()
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", setts.FmtpCntrlAddress, setts.FmtpCntrlPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Printf("did not connect: %v", err)
+		logger.PrintfErr("did not connect to GRPC: %v", err)
 	}
 
 	defer conn.Close()
 	gc := pb.NewFmtpServiceClient(conn)
 
-	sendTicker := time.NewTicker(sendInterval)
-	recvTicker := time.NewTicker(recvInterval)
+	sendTicker := time.NewTicker(time.Duration(setts.SendIntervalMsec) * time.Millisecond)
+	recvTicker := time.NewTicker(time.Duration(setts.RecvIntervalMsec) * time.Millisecond)
 	var msgId int64
 
-	testTicker := time.NewTicker(500 * time.Millisecond)
+	testTicker := time.NewTicker(time.Duration(setts.ImitGenMsgIntervalMsec) * time.Millisecond)
 	msgs := pb.MsgList{}
 
 	var expectBuffer []*pb.Msg
-	checkExpectedTicker := time.NewTicker(sendInterval * 10)
+	checkExpectedTicker := time.NewTicker(time.Duration(setts.SendIntervalMsec * 10))
 	var expectMutex sync.Mutex
 
 	/////////////////////////////////////////////////////////////////////////
 
 	prom_metrics.SetSettings(prom_metrics.PusherSettings{
-		PusherIntervalSec: 1,
-		GatewayUrl:        "http://192.168.1.24:9100", // from lemz
-		//GatewayUrl:       "http://127.0.0.1:9100",	// from home
-		GatewayJob:       "fmtp",
-		CollectNamespace: "fmtp",
-		CollectSubsystem: "imit",
-		CollectLabels:    map[string]string{"host": "192.168.10.219"},
+		PusherIntervalSec: setts.MetricsIntervalSec,
+		GatewayUrl:        setts.MetricsGatewayUrl,
+		GatewayJob:        "fmtp",
+		CollectNamespace:  "fmtp",
+		CollectSubsystem:  "imit",
+		CollectLabels:     map[string]string{"host": setts.MetricsHostLabel},
 	})
 	prom_metrics.AppendCounterVec(metricImitMsg, "Имитатор FMTP сообщений", []string{metricTypeLabel})
 	prom_metrics.Initialize()
@@ -83,7 +91,7 @@ func main() {
 			curTime := time.Now().UTC()
 
 			expectMutex.Lock()
-			for n := 0; n < 10; n++ {
+			for n := 0; n < setts.ImitGenMsgCount; n++ {
 				msgId++
 				msg1 := pb.Msg{
 					Cid:    "UIII",
@@ -119,7 +127,7 @@ func main() {
 				defer cancel()
 				_, err := gc.SendMsg(ctx, &msgs)
 				if err != nil {
-					log.Printf("Error SendMsg: %v", err)
+					logger.PrintfErr("Error SendMsg: %v", err)
 				} else {
 					prom_metrics.AddToCounterVec(metricImitMsg, len(msgs.List), map[string]string{metricTypeLabel: tpSend})
 					msgs.List = msgs.List[:0]
@@ -134,7 +142,7 @@ func main() {
 
 			r, err := gc.RecvMsq(context.Background(), &pb.SvcReq{Data: fmt.Sprintf("any data. recv time: %s ", curTime.Format("2006-01-02 15:04:05"))})
 			if err != nil {
-				log.Printf("Error RecvMsq: %v", err)
+				logger.PrintfErr("Error RecvMsq: %v", err)
 			}
 
 			if r != nil {
@@ -173,7 +181,7 @@ func main() {
 				if expId+1000 < msgId {
 					maxDelIdx = idx
 
-					log.Printf("!!!!Error expected msg not recieved %d", expId)
+					logger.PrintfErr("!!!!Error expected msg not recieved %d", expId)
 
 				} else {
 					break

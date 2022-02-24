@@ -1,0 +1,11 @@
+{
+	"FmtpCntrlAddress": "192.168.1.24",
+	"FmtpCntrlPort": 55566,
+	"SendIntervalMsec": 300,
+	"RecvIntervalMsec": 300,
+	"ImitGenMsgIntervalMsec": 500,
+	"ImitGenMsgCount": 10,
+	"MetricsGatewayUrl": "http://192.168.1.24:9100",
+	"MetricsIntervalSec": 1,
+	"MetricsHostLabel": "127.0.0.1"
+}

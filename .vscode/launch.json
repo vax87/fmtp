@@ -34,7 +34,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/chief/fdps_imit/main.go",
+            "program": "${workspaceFolder}/fdps_imit/main.go",
             "env": {
                 "GOOS": "windows",
                 "GOARC": "amd64"
